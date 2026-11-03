@@ -4,22 +4,43 @@ Plataforma para que los prospectos agenden su entrevista con quien coordina su
 carrera, los coordinadores mantengan su disponibilidad al día y Admisiones
 (Marysol) vea y administre todo.
 
-**Estado: prototipo (2-nov-2026).** Todo vive en el navegador de quien lo abre
-(`localStorage`). Arranca con datos de ejemplo; en cuanto se carga el Excel de
-Admisiones desde el Admin, trabaja con los datos reales **sólo en ese navegador**.
-Los datos reales nunca se guardan en los archivos del proyecto.
+**Publicada (2-nov-2026):** <https://cci-iberotj.github.io/agenda-entrevistas/>
 
-## Cómo se abre
-
-Doble clic en `ABRIR.bat` → <http://localhost:8794/>
-
-| Vista | Dirección | Para quién |
+| Vista | Dirección | Quién entra |
 |---|---|---|
-| Prospecto | `/` (index.html) | Público, pensada para celular |
-| Coordinador | `/coordinador.html` | Los 9 coordinadores (11 licenciaturas) |
-| Admin | `/admin.html` | Marysol |
+| Prospecto | `/` | Público: matrícula + correo |
+| Coordinador | `/coordinador.html` | Su correo + la clave que le da Admisiones |
+| Admin | `/admin.html` | Usuario `admisiones` + clave (en `datos/claves.txt`, fuera del repo) |
 
-Las tres comparten los datos si se abren en el mismo navegador.
+## Dónde viven los datos
+
+En la base de **LA PIZARRA** (proyecto `wrezcukptrtmnhnlxmao`), en el esquema
+propio **`admisiones`** — decisión de Leo del 2-nov-2026 para no ocupar el
+segundo lugar gratuito de Supabase. Ver `supabase/esquema.sql`.
+
+- Las tablas **no se ven** desde la página: el esquema no está expuesto y tiene
+  RLS sin políticas. Todo pasa por funciones `public.adm_*` que revisan quién
+  pregunta (matrícula + correo, o la sesión de `adm_entrar`).
+- Coordinadores y Admisiones **no** son usuarios de LA PIZARRA: tienen claves
+  propias de la agenda (bcrypt), sesiones de 12 h.
+- El candado de «dos personas, mismo horario» está en la base
+  (`pg_advisory_xact_lock` por coordinador) y la base vuelve a revisar
+  horario pintado, modalidad, bloqueos, anticipación y días hacia adelante.
+
+Herramientas:
+
+    python supabase/correr.py supabase/esquema.sql --si-borra   # (re)crear funciones
+    python supabase/correr.py "select count(*) from admisiones.citas"
+    python publicar.py "qué cambió"                           # versión + commit + empujar
+
+`correr.py` usa el token de cuenta que vive en `LA PIZARRA/datos/`.
+`config.js → motor: 'local'` + `modoPrueba: true` vuelve al prototipo con datos
+de ejemplo (no toca la base).
+
+## Probar en local
+
+Doble clic en `ABRIR.bat` → <http://localhost:8794/> (usa la misma base que lo
+publicado, salvo que se cambie el motor a 'local').
 
 ## El Excel de Admisiones
 
@@ -93,11 +114,10 @@ la rejilla, reiniciar el prototipo).
 | `prospecto.js`, `coordinador.js`, `admin.js` | Cada vista |
 | `estilos.css`, `tipografia.css` | Paleta de LA PIZARRA (prospecto con rojo vivo) y Alverata + Myriad empotradas |
 
-## Pendiente para salir de prototipo
+## Pendiente
 
-1. **Base compartida:** Supabase propio de Admisiones (separado de LA PIZARRA).
-   El público no lee la lista de solicitantes: una función recibe matrícula +
-   correo y contesta sólo lo de esa persona; otra aparta revalidando el horario.
-2. **Entrada de coordinadores y Marysol** con su correo IBERO.
-3. **Correos de los coordinadores** (el Excel no los trae) y sus horarios.
-4. Publicar en `cci-iberotj.github.io` con `modoPrueba: false`.
+1. Que Admisiones capture el **correo** de cada coordinador y le dé su **clave**
+   (Admin → Carreras y coordinadores → Editar → Generar). El Excel no trae correos.
+2. Que cada coordinador **pinte su horario** (o Admisiones por él, con «Abrir su agenda»).
+3. Volver a cargar el Excel cada vez que Admisiones lo actualice.
+4. Sin probar: el .ics en un iPhone real.
