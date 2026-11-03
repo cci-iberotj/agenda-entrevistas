@@ -81,6 +81,33 @@
     vista = b.dataset.vista; pintar();
   });
 
+  /* ── La liga de las entrevistas en línea ─────────────────────
+     Sin una liga de REUNIÓN válida, los prospectos sólo ven sus
+     horarios presenciales (Agenda.espacios y la base lo aplican). */
+  const MOTIVO_LIGA = {
+    falta: 'no has puesto tu liga',
+    mal: 'tu liga no es una dirección web',
+    canal: 'tu liga es de un equipo o canal de Teams y los prospectos no pueden entrar por ahí; tiene que ser de una reunión',
+  };
+  function avisoLiga(c, boton) {
+    const v = Agenda.ligaValida(c.liga);
+    if (v === 'ok' || !Agenda.ofreceLinea(c)) return '';
+    return '<div class="alerta-fila grave"><span>Abriste horarios <b>en línea</b>, pero ' + MOTIVO_LIGA[v] +
+      '. Mientras tanto, los prospectos sólo ven tus horarios <b>presenciales</b>.</span>' +
+      (boton ? '<button class="btn chico" data-ir="horario">Poner mi liga</button>' : '') + '</div>';
+  }
+  const AYUDA_LIGA =
+    '<details class="ayuda-liga"><summary>¿Cómo saco mi liga de Teams? (2 minutos)</summary><ol>' +
+    '<li>En Teams entra a <b>Calendario</b> y toca <b>Nueva reunión</b>.</li>' +
+    '<li>Título: «Entrevistas de admisión». Pon tu primer día de entrevistas y tu horario completo de ese día.</li>' +
+    '<li>Donde dice <b>No se repite</b>, haz que se repita los días en que entrevistas, con fecha de fin al terminar el periodo de admisión.</li>' +
+    '<li>No invites a nadie. Toca <b>Guardar</b>.</li>' +
+    '<li>Abre la reunión en tu calendario → <b>Opciones de reunión</b> → en «¿Quién puede omitir la sala de espera?» elige <b>Solo yo</b> (o «Organizadores»). Así, si llega el siguiente prospecto mientras entrevistas al anterior, espera afuera hasta que lo dejes pasar.</li>' +
+    '<li>Copia el vínculo de <b>Unirse a la reunión</b> y pégalo aquí arriba.</li></ol>' +
+    '<p class="meta">Es la misma liga para todas tus entrevistas; cada prospecto llega a su hora. La buena empieza con ' +
+    '<code>https://teams.microsoft.com/l/meetup-join/</code> o <code>https://teams.microsoft.com/meet/</code>. ' +
+    'Si empieza con <code>…/l/team/</code> o <code>…/l/channel/</code> es de un canal, y los de fuera de la IBERO no pueden entrar.</p></details>';
+
   /* ── Mis citas ─────────────────────────────────────────── */
   function pintarCitas() {
     const hoy = Agenda.hoy();
@@ -115,6 +142,7 @@
       '</div>' +
       (libres === 0 ? '<div class="alerta-fila grave">No tienes horarios libres en los próximos 7 días: los prospectos no pueden agendar contigo.' +
         '<button class="btn chico" data-ir="horario">Abrir horarios</button></div>' : '') +
+      avisoLiga(co(), true) +
       '<div class="filtros"><div class="chips">' +
       [['proximas', 'Próximas'], ['marcar', 'Por marcar' + (porMarcar.length ? ' (' + porMarcar.length + ')' : '')],
        ['faltan', 'Sin agendar' + (faltan.length ? ' (' + faltan.length + ')' : '')],
@@ -149,13 +177,16 @@
         '<button class="bloque cita ' + c.estado + '" data-cita="' + c.id + '"><b>' + Agenda.horaBonita(c.hora) + '</b>' +
         esc(c.nombre.split(' ').slice(0, 2).join(' ')) + '<br><span class="meta">' + Agenda.MODALIDADES[c.modalidad] + '</span></button>' }));
       if (!pasado && !diaTapado) {
-        Agenda.espacios(sinNada, fecha, vacios, { sinAnticipacion: true }).forEach(e => {
+        const ligaOk = Agenda.ligaValida(yoCo.liga) === 'ok';
+        Agenda.espacios(sinNada, fecha, vacios, { sinAnticipacion: true, aunSinLiga: true }).forEach(e => {
           const m = Agenda.aMin(e.hora);
           if (citas.some(c => m < Agenda.aMin(c.hora) + c.duracion && Agenda.aMin(c.hora) < m + dur)) return;
           const f = Agenda.aFecha(fecha); f.setMinutes(m);
           if (f < ahora) return;
           const tapado = bloqueos.some(b => m < Agenda.aMin(b.hasta) && Agenda.aMin(b.desde) < m + dur);
-          const mods = e.modalidades.length === 2 ? 'Presencial o en línea' : Agenda.MODALIDADES[e.modalidades[0]];
+          let mods = e.modalidades.length === 2 ? 'Presencial o en línea' : Agenda.MODALIDADES[e.modalidades[0]];
+          if (!ligaOk && e.modalidades.includes('linea'))
+            mods = e.modalidades.length === 2 ? 'Sólo presencial · falta tu liga' : 'En línea · falta tu liga';
           piezas.push({ m, html: '<button class="bloque ' + (tapado ? 'tapado' : 'libre') + '" data-fecha="' + fecha + '" data-hora="' + e.hora + '">' +
             '<b>' + Agenda.horaBonita(e.hora) + '</b>' + (tapado ? 'Bloqueado' : mods) + '</button>' });
         });
@@ -173,7 +204,7 @@
     }).join('');
 
     const fin = Agenda.sumar(lunes, 5);
-    $('#principal').innerHTML = '<div class="contenido">' +
+    $('#principal').innerHTML = '<div class="contenido">' + avisoLiga(yoCo, true) +
       '<div class="seccion-titulo"><div><h2>Semana del ' + Agenda.aFecha(lunes).getDate() + ' al ' + Agenda.fechaLarga(fin).replace(/^\S+ /, '') + '</h2>' +
       '<p class="meta">¿Surgió algo? Toca un horario libre para bloquearlo; tócalo otra vez para abrirlo.</p></div>' +
       '<div style="display:flex;gap:6px"><button class="btn chico" data-semana="-7">← Anterior</button>' +
@@ -222,8 +253,9 @@
       (c.foto ? '<button class="btn fantasma chico" id="quitar-foto">Quitar foto</button>' : '') + '</div></div>' +
       '<div class="fila-campos">' +
       '<label class="campo"><span>Dónde atiendes en persona</span><input type="text" data-campo="oficina" value="' + esc(c.oficina) + '" placeholder="Edificio, cubículo u oficina"></label>' +
-      '<label class="campo"><span>Liga para las entrevistas en línea</span><input type="url" data-campo="liga" value="' + esc(c.liga) + '" placeholder="https://teams.microsoft.com/…"></label>' +
-      '</div></div>' +
+      '<label class="campo"><span>Liga para las entrevistas en línea</span><input type="url" data-campo="liga" value="' + esc(c.liga) + '" placeholder="https://teams.microsoft.com/l/meetup-join/…">' +
+      '<small id="estado-liga"></small></label>' +
+      '</div>' + AYUDA_LIGA + '</div>' + avisoLiga(c, false) +
 
       '<div class="tarjeta" style="display:grid;gap:14px;padding:20px 20px 4px">' +
       '<div class="seccion-titulo"><div><h2>Tu semana tipo</h2>' +
@@ -245,10 +277,16 @@
     resumenHorario();
     montarRejilla();
 
+    estadoLiga(c.liga);
     document.querySelectorAll('[data-campo]').forEach(inp => inp.addEventListener('change', async () => {
-      await Almacen.guardarCoordinador({ id: c.id, [inp.dataset.campo]: inp.value.trim() });
-      datos = await Almacen.cargar();
+      const valor = inp.value.trim();
+      if (inp.dataset.campo === 'liga' && valor) {
+        const v = Agenda.ligaValida(valor);
+        if (v !== 'ok') { estadoLiga(valor); return UI.aviso('No la guardé: ' + MOTIVO_LIGA[v] + '.', 'error'); }
+      }
+      await Almacen.guardarCoordinador({ id: c.id, [inp.dataset.campo]: valor });
       UI.aviso('Guardado.', 'ok');
+      recargar();
     }));
     $('#foto').onchange = async e => {
       const f = e.target.files[0];
@@ -276,6 +314,16 @@
         UI.cerrarVentana(); recargar();
       };
     };
+  }
+
+  function estadoLiga(liga) {
+    const el = $('#estado-liga');
+    if (!el) return;
+    const v = Agenda.ligaValida(liga);
+    el.className = v === 'ok' ? 'ok-liga' : 'mal-liga';
+    el.textContent = v === 'ok' ? '✓ Liga de reunión: los prospectos la reciben al agendar en línea.'
+      : v === 'falta' ? 'Sin liga, tus horarios en línea no se ofrecen.'
+      : 'Esta liga no sirve: ' + MOTIVO_LIGA[v] + '.';
   }
 
   function resumenHorario() {

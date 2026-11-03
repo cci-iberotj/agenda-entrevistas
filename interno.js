@@ -58,6 +58,9 @@ const Interno = (() => {
       '<div class="detalle"><dl>' +
       '<dt>Cuándo</dt><dd>' + esc(Agenda.mayus(Agenda.fechaLarga(c.fecha))) + ', ' + Agenda.horaBonita(c.hora) + ' (' + c.duracion + ' min)</dd>' +
       '<dt>Modalidad</dt><dd>' + modalidad(c.modalidad) + '</dd>' +
+      (c.modalidad === 'linea' ? '<dt>Videollamada</dt><dd>' + (co && Agenda.ligaValida(co.liga) === 'ok'
+        ? '<a href="' + esc(co.liga) + '" target="_blank" rel="noopener">Entrar a la reunión</a>'
+        : '<span style="color:var(--peligro)">Sin liga válida: mándale al prospecto cómo conectarse</span>') + '</dd>' : '') +
       '<dt>Carrera</dt><dd>' + esc(carrera.nombre) + '</dd>' +
       '<dt>Coordinador</dt><dd>' + esc(Agenda.nombreCompleto(co)) + '</dd>' +
       '<dt>Matrícula</dt><dd>' + esc(c.matricula) + (s.ciclo ? ' · ' + esc(s.ciclo) : '') + '</dd>' +

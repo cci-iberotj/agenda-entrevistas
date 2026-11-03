@@ -247,7 +247,8 @@
       : { nueva: '¡Listo, ya tienes cita!', movida: 'Cambiamos tu cita', tuya: 'Tu cita' }[como];
     const pila = Agenda.pila(c.nombre);
     const lugar = enLinea
-      ? (co.liga ? '<a href="' + esc(co.liga) + '" target="_blank" rel="noopener">Entrar a la videollamada</a>' : 'Te mandamos la liga por correo')
+      ? (Agenda.ligaValida(co.liga) === 'ok' ? '<a href="' + esc(co.liga) + '" target="_blank" rel="noopener">Entrar a la videollamada</a>'
+        : 'Tu coordinador te va a mandar la liga a tu correo')
       : esc(co.oficina || 'IBERO Tijuana');
     $('#paso-listo').innerHTML =
       '<div class="tarjeta boleto">' +

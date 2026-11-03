@@ -50,14 +50,35 @@ const Agenda = (() => {
   }
   function horaFin(hhmm, dur) { return aHora(aMin(hhmm) + dur); }
 
+  /* ── La liga de la videollamada ────────────────────────────
+     'ok' · 'falta' · 'mal' (no es una dirección web) · 'canal' (es
+     la liga de un equipo, canal o chat de Teams: alguien de fuera de
+     la IBERO no puede entrar por ahí; tiene que ser de una REUNIÓN).
+     La base aplica la misma regla en admisiones._libre. */
+  const CANAL_TEAMS = /teams\.microsoft\.com\/l\/(team|channel|chat)\//i;
+  function ligaValida(liga) {
+    const l = String(liga || '').trim();
+    if (!l) return 'falta';
+    if (!/^https?:\/\/\S+$/i.test(l)) return 'mal';
+    if (CANAL_TEAMS.test(l)) return 'canal';
+    return 'ok';
+  }
+  /* ¿Abrió horarios en línea? (celdas «en línea» o «presencial o en línea») */
+  function ofreceLinea(co) {
+    return Object.values(co.semana || {}).some(d => Object.values(d).some(t => t === 'a' || t === 'l'));
+  }
+
   /* ── Horarios libres ─────────────────────────────────────
      Se recorren los tramos pintados del día de corrido y se cortan
      en piezas de la duración de la entrevista. Una pieza que cae en
      dos celdas ofrece sólo las modalidades que tienen las dos.
+     Sin una liga de reunión válida no se ofrece «en línea» (salvo
+     op.aunSinLiga, para que el coordinador vea lo que pintó).
      Luego se quitan las ocupadas, las bloqueadas y las que no
      cumplen la anticipación. */
   function espacios(co, fecha, datos, op = {}) {
     const aj = datos.ajustes;
+    const conLinea = op.aunSinLiga || ligaValida(co.liga) === 'ok';
     const dur = aj.duracion;
     const dia = (co.semana || {})[clave(fecha)] || {};
     const celdas = Object.keys(dia).map(aMin).sort((a, b) => a - b);
@@ -85,7 +106,7 @@ const Agenda = (() => {
 
     tramos.forEach(t => {
       for (let m = t.ini; m + dur <= t.fin; m += dur) {
-        let mods = ['presencial', 'linea'];
+        let mods = conLinea ? ['presencial', 'linea'] : ['presencial'];
         for (let c = Math.floor(m / CELDA) * CELDA; c < m + dur; c += CELDA) {
           const tipo = TIPOS[dia[aHora(c)]] || [];
           mods = mods.filter(x => tipo.includes(x));
@@ -205,7 +226,7 @@ const Agenda = (() => {
     RESULTADOS: { admitido: 'Admitido', no_admitido: 'No admitido' },
     hoy, sumar, clave, aMin, aHora, aFecha, mayus,
     fechaLarga, fechaCorta, horaBonita, horaFin,
-    espacios, proximos, ics, nombreCompleto, titulo, nombreNatural, pila, saludo, permiso,
+    espacios, proximos, ics, ligaValida, ofreceLinea, nombreCompleto, titulo, nombreNatural, pila, saludo, permiso,
     nombreDia: k => DIAS[CLAVES.indexOf(k)],
   };
 })();

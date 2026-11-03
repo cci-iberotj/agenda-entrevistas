@@ -134,6 +134,9 @@ declare
 begin
   if co is null or not coalesce((co->>'activo')::boolean, true) then return false; end if;
   if h !~ '^\d\d:\d\d$' or modalidad not in ('presencial', 'linea') then return false; end if;
+  -- en línea sólo con liga de REUNIÓN (no de equipo, canal o chat de Teams); igual que Agenda.ligaValida
+  if modalidad = 'linea' and not (coalesce(co->>'liga', '') ~* '^https?://\S+$'
+       and coalesce(co->>'liga', '') !~* 'teams\.microsoft\.com/l/(team|channel|chat)/') then return false; end if;
   c := (m / 30) * 30;
   while c < m + dur loop
     tipo := dia->>admisiones._hhmm(c);

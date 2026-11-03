@@ -41,6 +41,7 @@
   const coDe = carrera => datos.coordinadores.find(x => x.id === carrera.coordinador && x.activo);
   const libres7 = co => co ? Agenda.proximos(co, datos, { dias: 7 }).reduce((n, d) => n + d.espacios.length, 0) : 0;
   const agendaDe = id => 'coordinador.html?como=' + encodeURIComponent(id);
+  const sinLiga = co => co.activo && Agenda.ofreceLinea(co) && Agenda.ligaValida(co.liga) !== 'ok';
 
   /* ── Tablero ───────────────────────────────────────────── */
   const ciclos = () => [...new Set(datos.solicitantes.map(x => x.ciclo).filter(Boolean))];
@@ -104,6 +105,12 @@
         ? '<div class="alerta-fila grave"><span><b>' + alertas.length + ' licenciaturas</b> tienen solicitantes esperando y no les alcanzan los horarios de la próxima semana. Están en rojo en la tabla; desde ahí abres la agenda de cada coordinador.</span></div>'
         : alertas.length ? '<div class="alertas">' + alertas.map(a => '<div class="alerta-fila' + (a.grave ? ' grave' : '') + '"><span>' + a.txt + '</span>' + a.boton + '</div>').join('') + '</div>'
         : '<div class="alerta-fila" style="background:var(--ok-velo);color:var(--ok)">Hay horarios suficientes para todos los que faltan por agendar.</div>') +
+      (() => {
+        const faltan = datos.coordinadores.filter(sinLiga);
+        return faltan.length ? '<div class="alerta-fila"><span><b>' + faltan.length + (faltan.length === 1 ? ' coordinador abrió' : ' coordinadores abrieron') +
+          ' horarios en línea sin una liga de reunión válida</b> (' + faltan.map(c => esc(c.nombre.split(' ')[0])).join(', ') +
+          '). Sus prospectos sólo ven los horarios presenciales hasta que la pongan.</span></div>' : '';
+      })() +
       '<div class="tarjeta tabla-caja"><table class="tabla"><thead><tr><th>Licenciatura</th><th>Coordinador</th>' +
       '<th style="text-align:center">Solicitantes</th><th style="text-align:center">Por agendar</th><th style="text-align:center">Agendadas</th>' +
       '<th style="text-align:center">Admitidos</th><th style="text-align:center">No admitidos</th><th style="text-align:center">Libres 7 días</th></tr></thead><tbody>' +
@@ -295,6 +302,7 @@
           '<div class="datos"><b>' + esc(Agenda.nombreCompleto(co)) + (co.activo ? '' : ' · <span class="meta">inactivo</span>') + '</b>' +
           '<span class="meta">' + esc(co.correo || 'Sin correo') + '</span>' +
           (Almacen.necesitaSesion ? '<span>' + estadoAcceso(co) + '</span>' : '') +
+          (sinLiga(co) ? '<span><span class="insignia r-no_admitido">En línea sin liga válida</span></span>' : '') +
           '<div class="carreras-de">' + (suyas.map(c => '<span>' + esc(c.nombre) + '</span>').join('') || '<span>Sin carrera</span>') + '</div>' +
           '<span class="meta" style="margin-top:6px">' + String(horas).replace('.5', '½') + ' h a la semana · <b style="color:' + (n ? 'var(--ok)' : 'var(--peligro)') + '">' + n + ' libres</b> en 7 días</span>' +
           '<div class="medidor"><i style="width:' + Math.min(100, n / 30 * 100) + '%"></i></div>' +
@@ -354,6 +362,10 @@
       const val = n => { const el = v.querySelector('[name=' + n + ']'); return el ? el.value.trim() : ''; };
       const clave = val('clave');
       if (clave && !val('correo')) return UI.aviso('Para darle clave, escribe su correo: con ese entra.', 'error');
+      if (val('liga') && Agenda.ligaValida(val('liga')) !== 'ok')
+        return UI.aviso(Agenda.ligaValida(val('liga')) === 'canal'
+          ? 'Esa liga es de un equipo o canal de Teams: los prospectos no pueden entrar. Tiene que ser la de una reunión.'
+          : 'La liga tiene que ser una dirección web (https://…).', 'error');
       try {
         const activo = v.querySelector('[name=activo]');
         const r = await Almacen.guardarCoordinador({ id: co.id, titulo: val('titulo'), nombre: val('nombre'), correo: val('correo'),
@@ -398,7 +410,8 @@
       'Entra aquí: ' + new URL('coordinador.html', location.href).href,
       'Correo: ' + co.correo,
       'Clave temporal: ' + clave, '',
-      'La primera vez te va a pedir que pongas una clave propia.', '',
+      'La primera vez te va a pedir que pongas una clave propia.',
+      'Si vas a entrevistar en línea, pega en «Mi horario» la liga de tu reunión de Teams; ahí mismo viene cómo sacarla.', '',
       'Admisiones · IBERO Tijuana'].join('\n');
   }
   function fichaMensaje(co, texto) {

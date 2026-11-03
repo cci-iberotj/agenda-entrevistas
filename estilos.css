@@ -401,3 +401,11 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 14.5px; }
   .contenido { padding: 18px 16px 80px; }
   .rejilla { grid-template-columns: 44px repeat(6, minmax(44px, 1fr)); }
 }
+
+/* liga de las entrevistas en línea */
+.ok-liga { color: var(--ok); font-size: 13px; }
+.mal-liga { color: var(--peligro); font-size: 13px; }
+.ayuda-liga { border-top: 1px solid var(--linea-sutil); padding-top: 12px; }
+.ayuda-liga summary { cursor: pointer; font-weight: 600; color: var(--marca-tinta); }
+.ayuda-liga ol { margin: 10px 0; padding-left: 22px; display: grid; gap: 6px; font-size: 14.5px; }
+.ayuda-liga code { font-size: 12.5px; background: var(--capa-0); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
