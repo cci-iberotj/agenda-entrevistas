@@ -116,8 +116,10 @@ la rejilla, reiniciar el prototipo).
 
 ## Pendiente
 
-1. Que Admisiones capture el **correo** de cada coordinador y le dé su **clave**
-   (Admin → Carreras y coordinadores → Editar → Generar). El Excel no trae correos.
+1. Que Admisiones capture el **correo** de cada coordinador (Admin → Carreras y
+   coordinadores → Editar; el Excel no los trae) y luego toque **«Dar acceso»**:
+   genera una **clave temporal** para cada uno y su mensaje listo. Al entrar la
+   primera vez, la agenda les pide poner una clave propia (`clave_temporal`).
 2. Que cada coordinador **pinte su horario** (o Admisiones por él, con «Abrir su agenda»).
 3. Volver a cargar el Excel cada vez que Admisiones lo actualice.
 4. Sin probar: el .ics en un iPhone real.

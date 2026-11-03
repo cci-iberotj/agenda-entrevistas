@@ -235,10 +235,44 @@ const Interno = (() => {
         boton.disabled = true;
         try {
           const s = await Almacen.entrar(f.usuario.value, f.clave.value);
-          listo(s);
+          listo({ sesion: s, clave: f.clave.value });
         } catch (x) {
           err.textContent = x.message; err.classList.remove('oculto');
           f.clave.select();
+        } finally { boton.disabled = false; }
+      });
+    });
+  }
+
+  /* La primera vez que un coordinador entra con la clave temporal que
+     le dio Admisiones, pone la suya antes de ver su agenda. Si recién
+     la escribió al entrar, no se le vuelve a pedir. */
+  function pantallaClaveNueva(contenedor, temporal) {
+    return new Promise(listo => {
+      contenedor.innerHTML = '<form class="tarjeta entrar" novalidate>' +
+        '<span class="rotulo" style="justify-content:center"><b>IBERO Tijuana</b><span class="barra">/</span>Admisiones</span>' +
+        '<h2>Pon tu propia clave</h2><p class="meta">La que te mandaron es temporal. Escoge una que sólo tú sepas; con ella entrarás de aquí en adelante.</p>' +
+        (temporal ? '' : '<label class="campo" style="text-align:left"><span>Clave que te mandaron</span><input type="password" name="actual" autocomplete="current-password"></label>') +
+        '<label class="campo" style="text-align:left"><span>Tu clave nueva <em>(mínimo 6 caracteres)</em></span><input type="password" name="nueva" autocomplete="new-password"></label>' +
+        '<label class="campo" style="text-align:left"><span>Escríbela otra vez</span><input type="password" name="otra" autocomplete="new-password"></label>' +
+        '<p class="aviso-campo oculto" data-error></p>' +
+        '<button class="btn primario">Guardar y entrar</button></form>';
+      const f = contenedor.querySelector('form');
+      setTimeout(() => (f.actual || f.nueva).focus(), 30);
+      f.addEventListener('submit', async e => {
+        e.preventDefault();
+        const err = f.querySelector('[data-error]');
+        const decir = t => { err.textContent = t; err.classList.remove('oculto'); };
+        if (f.nueva.value.length < 6) return decir('La clave nueva debe tener al menos 6 caracteres.');
+        if (f.nueva.value !== f.otra.value) return decir('Las dos no coinciden. Escríbela igual en ambos campos.');
+        const boton = f.querySelector('button');
+        boton.disabled = true;
+        try {
+          await Almacen.miClave(temporal || f.actual.value, f.nueva.value);
+          UI.aviso('Listo, ya tienes tu clave.', 'ok');
+          listo();
+        } catch (x) {
+          decir(x.message === 'La clave actual no coincide.' ? 'La clave que te mandaron no coincide. Revísala en el mensaje.' : x.message);
         } finally { boton.disabled = false; }
       });
     });
@@ -269,5 +303,5 @@ const Interno = (() => {
 
   return { tabla, ficha, mover, modalidad, insignia, resultado, ICONO,
            deCarreras, sinCita, porAgendar, aConsideracion, tablaSolicitantes,
-           pantallaEntrar, cambiarClave, claveNueva };
+           pantallaEntrar, pantallaClaveNueva, cambiarClave, claveNueva };
 })();

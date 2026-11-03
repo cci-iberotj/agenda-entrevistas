@@ -284,7 +284,9 @@
       CONFIG.departamentos.indexOf(a.departamento) - CONFIG.departamentos.indexOf(b.departamento) || a.nombre.localeCompare(b.nombre, 'es'));
     $('#principal').innerHTML = '<div class="contenido">' +
       '<div class="seccion-titulo"><div><h2>Coordinadores</h2><p class="meta">Cada quien llena su horario en su agenda; desde aquí puedes abrirla y llenarla por él.</p></div>' +
-      '<button class="btn primario chico" data-nuevo-co>+ Agregar coordinador</button></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+      (Almacen.necesitaSesion ? '<button class="btn chico" data-accesos>Dar acceso</button>' : '') +
+      '<button class="btn primario chico" data-nuevo-co>+ Agregar coordinador</button></div></div>' +
       '<div class="lista-equipo">' + (cos.map(co => {
         const suyas = datos.carreras.filter(c => c.coordinador === co.id);
         const horas = Object.values(co.semana || {}).reduce((n, d) => n + Object.keys(d).length, 0) / 2;
@@ -292,6 +294,7 @@
         return '<div class="tarjeta ficha-co' + (co.activo ? '' : ' inactivo') + '">' + UI.avatar(co, 52) +
           '<div class="datos"><b>' + esc(Agenda.nombreCompleto(co)) + (co.activo ? '' : ' · <span class="meta">inactivo</span>') + '</b>' +
           '<span class="meta">' + esc(co.correo || 'Sin correo') + '</span>' +
+          (Almacen.necesitaSesion ? '<span>' + estadoAcceso(co) + '</span>' : '') +
           '<div class="carreras-de">' + (suyas.map(c => '<span>' + esc(c.nombre) + '</span>').join('') || '<span>Sin carrera</span>') + '</div>' +
           '<span class="meta" style="margin-top:6px">' + String(horas).replace('.5', '½') + ' h a la semana · <b style="color:' + (n ? 'var(--ok)' : 'var(--peligro)') + '">' + n + ' libres</b> en 7 días</span>' +
           '<div class="medidor"><i style="width:' + Math.min(100, n / 30 * 100) + '%"></i></div>' +
@@ -325,9 +328,11 @@
       '<label class="campo"><span>Correo IBERO <em>(con este entra a su agenda)</em></span><input type="email" name="correo" value="' + esc(co.correo) + '" placeholder="nombre@tijuana.ibero.mx"></label>' +
       '<label class="campo"><span>Dónde atiende en persona</span><input type="text" name="oficina" value="' + esc(co.oficina) + '"></label>' +
       '<label class="campo"><span>Liga para entrevistas en línea</span><input type="url" name="liga" value="' + esc(co.liga) + '"></label>' +
-      (Almacen.necesitaSesion ? '<div class="campo"><span>Clave para entrar a su agenda</span>' +
+      (Almacen.necesitaSesion ? '<div class="campo"><span>Clave temporal para entrar <em>(al entrar pone la suya)</em></span>' +
         '<div style="display:flex;gap:8px"><input type="text" name="clave" autocomplete="off" placeholder="' +
-        (co.tieneClave ? 'Ya tiene clave; escribe otra sólo para cambiarla' : 'Todavía no tiene: no puede entrar') + '">' +
+        (!co.tieneClave ? 'Todavía no tiene: no puede entrar'
+          : co.claveTemporal ? 'Ya tiene una temporal; genera otra sólo si la perdió'
+          : 'Ya puso su clave; genera otra sólo si la olvidó') + '">' +
         '<button class="btn chico" data-generar type="button">Generar</button></div></div>' : '') +
       (id ? '<label style="display:flex;gap:10px;align-items:center"><input type="checkbox" name="activo"' + (co.activo ? ' checked' : '') +
         ' style="width:20px;height:20px;accent-color:var(--marca-solida)"> Activo <span class="meta">(si lo desactivas, sus carreras dejan de recibir citas)</span></label>' : '') +
@@ -365,21 +370,79 @@
     };
   }
 
-  /* El recado listo para mandarle al coordinador: dónde entra, con qué correo y su clave. */
+  /* ── Accesos de los coordinadores ──────────────────────────
+     Admisiones da una clave TEMPORAL; la primera vez que el
+     coordinador entra, la agenda le pide poner la suya. */
+  function estadoAcceso(co) {
+    if (!co.correo) return '<span class="insignia e-cancelada">Falta su correo</span>';
+    if (!co.tieneClave) return '<span class="insignia r-no_admitido">Sin acceso</span>';
+    if (co.claveTemporal) return '<span class="insignia e-no_asistio">Clave temporal · aún no entra</span>';
+    return '<span class="insignia e-realizada">Ya entró</span>';
+  }
+  const ASUNTO = 'Tu agenda de entrevistas de admisión';
+  function mensajeAcceso(co, clave) {
+    return ['Hola, ' + co.nombre.split(' ')[0] + ':', '',
+      'Ya está lista la agenda de entrevistas de admisión. Ahí marcas los horarios en que puedes entrevistar y ves quién agendó contigo.', '',
+      'Entra aquí: ' + new URL('coordinador.html', location.href).href,
+      'Correo: ' + co.correo,
+      'Clave temporal: ' + clave, '',
+      'La primera vez te va a pedir que pongas una clave propia.', '',
+      'Admisiones · IBERO Tijuana'].join('\n');
+  }
+  function fichaMensaje(co, texto) {
+    return '<div class="campo"><span>' + esc(Agenda.nombreCompleto(co)) + '</span>' +
+      '<textarea readonly style="min-height:200px">' + esc(texto) + '</textarea>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+      '<a class="btn chico" href="mailto:' + esc(co.correo) + '?subject=' + encodeURIComponent(ASUNTO) + '&body=' + encodeURIComponent(texto) + '">Abrir en el correo</a>' +
+      '<button class="btn primario chico" data-copiar>Copiar</button></div></div>';
+  }
+  function copiables(v) {
+    v.querySelectorAll('[data-copiar]').forEach(b => b.onclick = async () => {
+      const t = b.closest('.campo').querySelector('textarea');
+      try { await navigator.clipboard.writeText(t.value); UI.aviso('Copiado.', 'ok'); }
+      catch (e) { t.select(); }
+    });
+  }
   function mostrarAcceso(co, clave) {
-    const url = new URL('coordinador.html', location.href).href;
-    const texto = ['Hola, ' + co.nombre.split(' ')[0] + '. Ya puedes llenar tu horario de entrevistas de admisión:',
-      url, 'Correo: ' + co.correo, 'Clave: ' + clave, '(Puedes cambiar tu clave adentro, en «Mi clave».)'].join('\n');
     const v = UI.ventana('Acceso de ' + co.nombre.split(' ')[0],
-      '<p>Guardado. Mándale esto a ' + esc(co.nombre) + '; la clave no se vuelve a mostrar.</p>' +
-      '<textarea readonly style="min-height:130px">' + esc(texto) + '</textarea>' +
-      '<div class="pie"><a class="btn" href="mailto:' + esc(co.correo) + '?subject=' + encodeURIComponent('Tu agenda de entrevistas de admisión') +
-      '&body=' + encodeURIComponent(texto) + '">Abrir en el correo</a><button class="btn primario" data-copiar>Copiar</button></div>', { sinFoco: true });
-    v.querySelector('[data-copiar]').onclick = async () => {
-      try { await navigator.clipboard.writeText(texto); UI.aviso('Copiado.', 'ok'); }
-      catch (e) { v.querySelector('textarea').select(); }
-    };
+      '<p>Guardado. Mándale esto; la clave temporal no se vuelve a mostrar.</p>' + fichaMensaje(co, mensajeAcceso(co, clave)),
+      { sinFoco: true });
+    copiables(v);
     recargar();
+  }
+  /* Varios a la vez: los que tienen correo y todavía no tienen acceso
+     van palomeados; a los demás se les puede regenerar si la perdieron. */
+  function darAccesos() {
+    const cos = datos.coordinadores.filter(c => c.activo).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    const v = UI.ventana('Dar acceso a coordinadores',
+      '<p class="meta">Se genera una clave temporal para cada uno y te sale su mensaje listo. Los que no tienen correo no se pueden elegir: captúralo en «Editar».</p>' +
+      '<div style="display:grid;gap:8px">' + cos.map(c => '<label style="display:flex;gap:10px;align-items:center;' + (c.correo ? 'cursor:pointer' : 'opacity:.55') + '">' +
+        '<input type="checkbox" value="' + c.id + '"' + (c.correo ? '' : ' disabled') + (c.correo && !c.tieneClave ? ' checked' : '') +
+        ' style="width:20px;height:20px;accent-color:var(--marca-solida)">' +
+        '<span style="flex:1"><b>' + esc(Agenda.nombreCompleto(c)) + '</b><span class="meta" style="display:block">' + esc(c.correo || 'sin correo') + '</span></span>' +
+        estadoAcceso(c) + '</label>').join('') + '</div>' +
+      '<div class="pie"><button class="btn fantasma" data-no>Cancelar</button><button class="btn primario" data-si>Generar claves</button></div>',
+      { ancha: true, sinFoco: true });
+    v.querySelector('[data-no]').onclick = UI.cerrarVentana;
+    v.querySelector('[data-si]').onclick = async () => {
+      const ids = [...v.querySelectorAll('input:checked')].map(x => x.value);
+      if (!ids.length) return UI.aviso('Palomea al menos a uno.', 'error');
+      const hechos = [];
+      try {
+        for (const id of ids) {
+          const co = datos.coordinadores.find(c => c.id === id);
+          const clave = Interno.claveNueva();
+          await Almacen.claveCoordinador(id, clave);
+          hechos.push([co, mensajeAcceso(co, clave)]);
+        }
+      } catch (e) { UI.aviso(e.message, 'error'); }
+      if (!hechos.length) return;
+      const w = UI.ventana(hechos.length === 1 ? 'Su mensaje' : 'Sus ' + hechos.length + ' mensajes',
+        '<p>Mándale a cada quien el suyo. Las claves temporales no se vuelven a mostrar.</p>' +
+        hechos.map(([co, t]) => fichaMensaje(co, t)).join(''), { ancha: true, sinFoco: true });
+      copiables(w);
+      recargar();
+    };
   }
 
   function editarCarrera(id) {
@@ -450,7 +513,7 @@
 
   /* ── Clics del contenido ───────────────────────────────── */
   $('#principal').addEventListener('click', e => {
-    const t = e.target.closest('[data-habilitar],[data-cita],[data-periodo],[data-ir],[data-nuevo-co],[data-editar-co],[data-nueva-ca],[data-editar-ca],[data-ciclo],[data-sit]');
+    const t = e.target.closest('[data-accesos],[data-habilitar],[data-cita],[data-periodo],[data-ir],[data-nuevo-co],[data-editar-co],[data-nueva-ca],[data-editar-ca],[data-ciclo],[data-sit]');
     if (!t) return;
     const d = t.dataset;
     if (d.habilitar) Almacen.habilitar(d.habilitar, !!d.si, QUIEN).then(recargar);
@@ -460,6 +523,7 @@
     else if (d.periodo) { filtro.periodo = d.periodo; pintar(); }
     else if (d.ir) { vista = d.ir; pintar(); }
     else if ('nuevoCo' in d) editarCoordinador(null);
+    else if ('accesos' in d) darAccesos();
     else if (d.editarCo) editarCoordinador(d.editarCo);
     else if ('nuevaCa' in d) editarCarrera(null);
     else if (d.editarCa) editarCarrera(d.editarCa);

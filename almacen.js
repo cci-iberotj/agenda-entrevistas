@@ -368,7 +368,11 @@ const Almacen = (() => {
         localStorage.removeItem(LLAVE_SESION);
         if (s) await rpc('adm_salir', { p_token: s.token }).catch(() => {});
       },
-      async miClave(actual, nueva) { await rpc('adm_mi_clave', { p_token: token(), p_actual: actual, p_nueva: nueva }); },
+      async miClave(actual, nueva) {
+        await rpc('adm_mi_clave', { p_token: token(), p_actual: actual, p_nueva: nueva });
+        const s = sesion();     // ya no es temporal: que no la vuelva a pedir
+        if (s && s.cambiar) localStorage.setItem(LLAVE_SESION, JSON.stringify(Object.assign(s, { cambiar: false })));
+      },
       async claveCoordinador(id, clave) { await rpc('adm_clave_coordinador', { p_token: token(), p_id: id, p_clave: clave }); },
 
       /* Con sesión: todo lo que esa sesión puede ver. Sin sesión: lo del

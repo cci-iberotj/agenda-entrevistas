@@ -28,6 +28,8 @@ insert into admisiones.config (id) values (1) on conflict do nothing;
 
 create table if not exists admisiones.carreras      (id text primary key, d jsonb not null);
 create table if not exists admisiones.coordinadores (id text primary key, d jsonb not null, clave text);
+-- La clave que da Admisiones es temporal: al entrar, la agenda le pide poner una propia.
+alter table admisiones.coordinadores add column if not exists clave_temporal boolean not null default false;
 create table if not exists admisiones.solicitantes  (matricula text primary key, d jsonb not null);
 create table if not exists admisiones.citas (
   id text primary key, d jsonb not null,
@@ -284,11 +286,12 @@ end $$;
 create or replace function public.adm_entrar(p_usuario text, p_clave text) returns jsonb
 language plpgsql security definer set search_path = admisiones, public as $$
 declare u text := lower(trim(coalesce(p_usuario, ''))); rol text; quien text; nombre text; t text; exp timestamptz;
+        cambiar boolean := false;
 begin
   select 'admin', a.usuario, a.nombre into rol, quien, nombre from admisiones.admins a
    where a.usuario = u and a.clave = extensions.crypt(coalesce(p_clave, ''), a.clave);
   if rol is null then
-    select 'coordinador', c.id, c.d->>'nombre' into rol, quien, nombre from admisiones.coordinadores c
+    select 'coordinador', c.id, c.d->>'nombre', c.clave_temporal into rol, quien, nombre, cambiar from admisiones.coordinadores c
      where lower(c.d->>'correo') = u and c.clave is not null and coalesce((c.d->>'activo')::boolean, true)
        and c.clave = extensions.crypt(coalesce(p_clave, ''), c.clave);
   end if;
@@ -297,7 +300,7 @@ begin
   t := encode(extensions.gen_random_bytes(24), 'hex');
   exp := now() + interval '12 hours';
   insert into admisiones.sesiones values (t, rol, quien, nombre, exp);
-  return jsonb_build_object('token', t, 'rol', rol, 'quien', quien, 'nombre', nombre, 'expira', exp);
+  return jsonb_build_object('token', t, 'rol', rol, 'quien', quien, 'nombre', nombre, 'expira', exp, 'cambiar', coalesce(cambiar, false));
 end $$;
 
 create or replace function public.adm_salir(p_token text) returns void
@@ -309,11 +312,12 @@ language plpgsql security definer set search_path = admisiones, public as $$
 declare s admisiones.sesiones := admisiones._sesion(p_token); n int;
 begin
   if length(coalesce(p_nueva, '')) < 6 then raise exception 'La clave nueva debe tener al menos 6 caracteres.'; end if;
+  if p_nueva = p_actual then raise exception 'La clave nueva tiene que ser distinta de la que te dieron.'; end if;
   if s.rol = 'admin' then
     update admisiones.admins set clave = extensions.crypt(p_nueva, extensions.gen_salt('bf'))
      where usuario = s.quien and clave = extensions.crypt(coalesce(p_actual, ''), clave);
   else
-    update admisiones.coordinadores set clave = extensions.crypt(p_nueva, extensions.gen_salt('bf'))
+    update admisiones.coordinadores set clave = extensions.crypt(p_nueva, extensions.gen_salt('bf')), clave_temporal = false
      where id = s.quien and clave = extensions.crypt(coalesce(p_actual, ''), clave);
   end if;
   get diagnostics n = row_count;
@@ -334,7 +338,7 @@ begin
     'ajustes', admisiones._aj(),
     'carreras', (select coalesce(jsonb_agg(d), '[]') from admisiones.carreras),
     'coordinadores', (select coalesce(jsonb_agg(case when s.rol = 'admin' or id = s.quien
-                        then d || jsonb_build_object('tieneClave', clave is not null) else admisiones._co_publico(d) end), '[]')
+                        then d || jsonb_build_object('tieneClave', clave is not null, 'claveTemporal', clave_temporal) else admisiones._co_publico(d) end), '[]')
                       from admisiones.coordinadores),
     'solicitantes', (select coalesce(jsonb_agg(x.d), '[]') from admisiones.solicitantes x
                      where s.rol = 'admin' or admisiones._norm(x.d->>'licenciatura') in
@@ -388,7 +392,7 @@ begin
      where key in ('id', 'semana', 'bloqueos', 'oficina', 'liga', 'foto', 'titulo');
   end if;
   if length(coalesce(c->>'foto', '')) > 400000 then raise exception 'La foto es demasiado grande.'; end if;
-  c := c - 'tieneClave';
+  c := c - 'tieneClave' - 'claveTemporal';
   select '{"activo":true,"semana":{},"bloqueos":[],"foto":"","titulo":"","oficina":"","liga":"","correo":""}'::jsonb ||
          coalesce((select d from admisiones.coordinadores where id = c->>'id'), '{}') || c into r;
   r := jsonb_set(r, '{nombre}', to_jsonb(trim(coalesce(r->>'nombre', ''))));
@@ -406,7 +410,7 @@ language plpgsql security definer set search_path = admisiones, public as $$
 begin
   perform admisiones._admin(p_token);
   if length(coalesce(p_clave, '')) < 6 then raise exception 'La clave debe tener al menos 6 caracteres.'; end if;
-  update admisiones.coordinadores set clave = extensions.crypt(p_clave, extensions.gen_salt('bf')) where id = p_id;
+  update admisiones.coordinadores set clave = extensions.crypt(p_clave, extensions.gen_salt('bf')), clave_temporal = true where id = p_id;
   delete from admisiones.sesiones where quien = p_id;   -- la clave vieja deja de servir en todos lados
 end $$;
 
@@ -504,7 +508,7 @@ language plpgsql security definer set search_path = admisiones, public as $$
 begin
   perform admisiones._admin(p_token);
   insert into admisiones.coordinadores (id, d)
-    select x->>'id', x - 'tieneClave' from jsonb_array_elements(p_coordinadores) x
+    select x->>'id', x - 'tieneClave' - 'claveTemporal' from jsonb_array_elements(p_coordinadores) x
     on conflict (id) do nothing;
   insert into admisiones.carreras (id, d)
     select x->>'id', x from jsonb_array_elements(p_carreras) x

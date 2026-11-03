@@ -356,9 +356,14 @@
 
   /* ── Arranque ──────────────────────────────────────────── */
   (async () => {
-    if (Almacen.necesitaSesion && !Almacen.sesion())
-      await Interno.pantallaEntrar($('#principal'), 'Entra a tu agenda',
-        'Con tu correo IBERO y la clave que te dio Admisiones.');
+    let temporal = '';
+    if (Almacen.necesitaSesion && !Almacen.sesion()) {
+      const r = await Interno.pantallaEntrar($('#principal'), 'Entra a tu agenda',
+        'Con tu correo IBERO y la clave que te mandó Admisiones.');
+      temporal = r.clave;
+    }
+    if (Almacen.necesitaSesion && Almacen.sesion().cambiar)
+      await Interno.pantallaClaveNueva($('#principal'), temporal);
     try { datos = await Almacen.cargar(); }
     catch (e) { if (e.message === 'SIN_SESION') return location.reload(); throw e; }
     const pedido = new URLSearchParams(location.search).get('como');
