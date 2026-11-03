@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Agenda tu entrevista · IBERO Tijuana</title>
+<link rel="stylesheet" href="tipografia.css?v=1.0">
+<link rel="stylesheet" href="estilos.css?v=1.0">
+</head>
+<body class="publico">
+
+<header class="portada" style="background-image:url('fotos/portada.jpg')">
+  <div class="dentro">
+    <span class="rotulo"><b>IBERO Tijuana</b><span class="barra">/</span>Admisiones</span>
+    <h1>Agenda tu entrevista con tu coordinador</h1>
+    <p id="bajada">Escribe tu matrícula, escoge el horario que te acomode y listo.</p>
+  </div>
+</header>
+
+<main class="hoja">
+  <ol class="pasos" id="pasos">
+    <li data-paso="tu"><i>1</i><span>Tus datos</span></li>
+    <li data-paso="horario"><i>2</i><span>Horario</span></li>
+    <li data-paso="confirmar"><i>3</i><span>Confirmar</span></li>
+  </ol>
+
+  <!-- 1 · Quién eres -->
+  <section class="paso" id="paso-tu">
+    <h2>¿Quién eres?</h2>
+    <p class="meta">Con tu matrícula sabemos tu carrera y quién te entrevista. Si ya agendaste, aquí mismo ves tu cita.</p>
+    <form class="tarjeta formulario" id="form-tu" novalidate>
+      <label class="campo" data-campo="matricula">
+        <span>Matrícula</span>
+        <input type="text" name="matricula" class="mayus" inputmode="text" autocomplete="off" placeholder="La que te dio Admisiones, p. ej. 1524825">
+        <small class="falta">Escribe tu matrícula.</small>
+      </label>
+      <label class="campo" data-campo="correo">
+        <span>Correo</span>
+        <input type="email" name="correo" autocomplete="email" placeholder="El que usaste al registrarte">
+        <small class="falta">Revisa tu correo.</small>
+      </label>
+      <p class="aviso-campo oculto" id="error-tu"></p>
+      <button type="submit" class="btn primario" id="entrar">Continuar</button>
+      <button type="button" class="btn fantasma chico oculto" id="usar-ejemplo">Usar un prospecto de ejemplo</button>
+    </form>
+  </section>
+
+  <!-- Avisos: aún no puede agendar -->
+  <section class="paso oculto" id="paso-aviso"></section>
+
+  <!-- 2 · Horario -->
+  <section class="paso oculto" id="paso-horario">
+    <h2 id="titulo-horario">Escoge tu horario</h2>
+    <div class="tarjeta quien" id="quien"></div>
+    <div class="centro" id="caja-modalidad"></div>
+    <div class="dias" id="dias" role="listbox" aria-label="Día"></div>
+    <div class="horas" id="horas"></div>
+    <div class="barra-acciones">
+      <button class="btn fantasma" id="atras-horario">← Volver</button>
+      <button class="btn primario" id="seguir-horario" disabled>Seguir</button>
+    </div>
+  </section>
+
+  <!-- 3 · Confirmar -->
+  <section class="paso oculto" id="paso-confirmar">
+    <h2>¿Todo bien?</h2>
+    <p class="meta">Revisa tu cita y déjanos un celular por si hay que avisarte algo.</p>
+    <form class="tarjeta formulario" id="form-confirmar" novalidate>
+      <div class="resumen" id="resumen"></div>
+      <div class="detalle"><dl id="ficha-tu"></dl></div>
+      <label class="campo" data-campo="telefono">
+        <span>Celular <em>(WhatsApp)</em></span>
+        <input type="tel" name="telefono" autocomplete="tel" placeholder="664 000 0000">
+        <small class="falta">Escribe un celular de 10 dígitos.</small>
+      </label>
+    </form>
+    <div class="barra-acciones">
+      <button class="btn fantasma" id="atras-confirmar">← Cambiar horario</button>
+      <button class="btn primario" id="confirmar">Confirmar mi cita</button>
+    </div>
+  </section>
+
+  <!-- Listo -->
+  <section class="paso oculto" id="paso-listo"></section>
+</main>
+
+<footer class="pie-publico" id="pie"></footer>
+
+<script src="config.js?v=1.0"></script>
+<script src="agenda.js?v=1.0"></script>
+<script src="ejemplo.js?v=1.0"></script>
+<script src="importar.js?v=1.0"></script>
+<script src="almacen.js?v=1.0"></script>
+<script src="prospecto.js?v=1.0"></script>
+</body>
+</html>
