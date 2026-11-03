@@ -291,5 +291,12 @@ const UI = (() => {
     });
   }
 
-  return { esc, iniciales, avatar, aviso, ventana, cerrarVentana, descargar, etiquetaPrueba, leerFoto };
+  /* Abre un mailto: (o cualquier liga) como si se hubiera hecho clic */
+  function abrir(url) {
+    const a = document.createElement('a');
+    a.href = url;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  return { esc, iniciales, avatar, aviso, ventana, cerrarVentana, descargar, etiquetaPrueba, leerFoto, abrir };
 })();

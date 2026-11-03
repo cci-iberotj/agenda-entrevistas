@@ -298,7 +298,9 @@
           '<div class="carreras-de">' + (suyas.map(c => '<span>' + esc(c.nombre) + '</span>').join('') || '<span>Sin carrera</span>') + '</div>' +
           '<span class="meta" style="margin-top:6px">' + String(horas).replace('.5', '½') + ' h a la semana · <b style="color:' + (n ? 'var(--ok)' : 'var(--peligro)') + '">' + n + ' libres</b> en 7 días</span>' +
           '<div class="medidor"><i style="width:' + Math.min(100, n / 30 * 100) + '%"></i></div>' +
-          '<div class="acciones-co"><a class="btn chico" href="' + agendaDe(co.id) + '" target="_blank">Abrir su agenda</a>' +
+          '<div class="acciones-co">' +
+          (Almacen.necesitaSesion && co.correo ? '<button class="btn primario chico" data-mandar="' + co.id + '">✉ Mandar acceso</button>' : '') +
+          '<a class="btn chico" href="' + agendaDe(co.id) + '" target="_blank">Abrir su agenda</a>' +
           '<button class="btn fantasma chico" data-editar-co="' + co.id + '">Editar</button></div></div></div>';
       }).join('') || '<div class="vacio"><b>Todavía no hay coordinadores.</b>Agrega el primero.</div>') + '</div>' +
 
@@ -380,8 +382,18 @@
     return '<span class="insignia e-realizada">Ya entró</span>';
   }
   const ASUNTO = 'Tu agenda de entrevistas de admisión';
+  /* «Juan Manuel Ávalos González» → «Juan Manuel»: todo menos los dos apellidos */
+  function pila(co) {
+    const p = co.nombre.trim().split(/\s+/);
+    return p.length >= 3 ? p.slice(0, -2).join(' ') : p[0];
+  }
+  /* Outlook de escritorio abre los mailto:; si en esa computadora no
+     está como programa de correo, queda la versión del navegador. */
+  const aOutlook = (co, texto) => 'mailto:' + co.correo + '?subject=' + encodeURIComponent(ASUNTO) + '&body=' + encodeURIComponent(texto);
+  const aOutlookWeb = (co, texto) => 'https://outlook.office.com/mail/deeplink/compose?to=' + encodeURIComponent(co.correo) +
+    '&subject=' + encodeURIComponent(ASUNTO) + '&body=' + encodeURIComponent(texto);
   function mensajeAcceso(co, clave) {
-    return ['Hola, ' + co.nombre.split(' ')[0] + ':', '',
+    return ['Hola, ' + pila(co) + ':', '',
       'Ya está lista la agenda de entrevistas de admisión. Ahí marcas los horarios en que puedes entrevistar y ves quién agendó contigo.', '',
       'Entra aquí: ' + new URL('coordinador.html', location.href).href,
       'Correo: ' + co.correo,
@@ -393,8 +405,9 @@
     return '<div class="campo"><span>' + esc(Agenda.nombreCompleto(co)) + '</span>' +
       '<textarea readonly style="min-height:200px">' + esc(texto) + '</textarea>' +
       '<div style="display:flex;gap:8px;justify-content:flex-end">' +
-      '<a class="btn chico" href="mailto:' + esc(co.correo) + '?subject=' + encodeURIComponent(ASUNTO) + '&body=' + encodeURIComponent(texto) + '">Abrir en el correo</a>' +
-      '<button class="btn primario chico" data-copiar>Copiar</button></div></div>';
+      '<a class="btn fantasma chico" href="' + esc(aOutlookWeb(co, texto)) + '" target="_blank" rel="noopener">Outlook en el navegador</a>' +
+      '<button class="btn chico" data-copiar>Copiar</button>' +
+      '<a class="btn primario chico" href="' + esc(aOutlook(co, texto)) + '">Abrir en Outlook</a></div></div>';
   }
   function copiables(v) {
     v.querySelectorAll('[data-copiar]').forEach(b => b.onclick = async () => {
@@ -410,6 +423,32 @@
     copiables(v);
     recargar();
   }
+  /* Desde la tarjeta del coordinador: genera la clave y abre Outlook con
+     el mensaje ya escrito; Marysol sólo le da Enviar. */
+  function mandarAcceso(id) {
+    const co = datos.coordinadores.find(c => c.id === id);
+    const v = UI.ventana('Mandar acceso a ' + pila(co),
+      '<p>Se genera una <b>clave temporal nueva</b> y se abre Outlook con el mensaje listo para <b>' + esc(co.correo) + '</b>.</p>' +
+      (co.tieneClave ? '<p class="meta">' + (co.claveTemporal ? 'Ya se le había mandado una' : 'Ya había entrado con su propia clave') +
+        ': esa deja de servir y tendrá que usar la nueva.</p>' : '') +
+      '<div class="pie"><button class="btn fantasma" data-no>Cancelar</button><button class="btn primario" data-si>Abrir en Outlook</button></div>',
+      { sinFoco: true });
+    v.querySelector('[data-no]').onclick = UI.cerrarVentana;
+    v.querySelector('[data-si]').onclick = async () => {
+      try {
+        const clave = Interno.claveNueva();
+        await Almacen.claveCoordinador(co.id, clave);
+        const texto = mensajeAcceso(co, clave);
+        UI.abrir(aOutlook(co, texto));
+        const w = UI.ventana('Mensaje para ' + pila(co),
+          '<p>Se abrió Outlook con el mensaje. Si no apareció, ábrelo en el navegador o cópialo. La clave temporal no se vuelve a mostrar.</p>' +
+          fichaMensaje(co, texto), { sinFoco: true });
+        copiables(w);
+        recargar();
+      } catch (e) { UI.aviso(e.message, 'error'); }
+    };
+  }
+
   /* Varios a la vez: los que tienen correo y todavía no tienen acceso
      van palomeados; a los demás se les puede regenerar si la perdieron. */
   function darAccesos() {
@@ -513,7 +552,7 @@
 
   /* ── Clics del contenido ───────────────────────────────── */
   $('#principal').addEventListener('click', e => {
-    const t = e.target.closest('[data-accesos],[data-habilitar],[data-cita],[data-periodo],[data-ir],[data-nuevo-co],[data-editar-co],[data-nueva-ca],[data-editar-ca],[data-ciclo],[data-sit]');
+    const t = e.target.closest('[data-mandar],[data-accesos],[data-habilitar],[data-cita],[data-periodo],[data-ir],[data-nuevo-co],[data-editar-co],[data-nueva-ca],[data-editar-ca],[data-ciclo],[data-sit]');
     if (!t) return;
     const d = t.dataset;
     if (d.habilitar) Almacen.habilitar(d.habilitar, !!d.si, QUIEN).then(recargar);
@@ -524,6 +563,7 @@
     else if (d.ir) { vista = d.ir; pintar(); }
     else if ('nuevoCo' in d) editarCoordinador(null);
     else if ('accesos' in d) darAccesos();
+    else if (d.mandar) mandarAcceso(d.mandar);
     else if (d.editarCo) editarCoordinador(d.editarCo);
     else if ('nuevaCa' in d) editarCarrera(null);
     else if (d.editarCa) editarCarrera(d.editarCa);
