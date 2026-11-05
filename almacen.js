@@ -282,7 +282,10 @@ const Almacen = (() => {
         if ('resultado' in cambios && cambios.resultado !== (c.resultado || ''))
           anotar(c, 'Resultado de la entrevista: ' + (Agenda.RESULTADOS[cambios.resultado] || 'sin definir'), quien);
         if (cambios.correo || cambios.telefono) anotar(c, 'Corrigió datos de contacto', quien);
-        if (cambios.avisada) { anotar(c, 'Avisó por correo al prospecto y al coordinador', quien); cambios = Object.assign({}, cambios, { avisada: ahora() }); }
+        if ('avisada' in cambios) {
+          if (cambios.avisada) { anotar(c, 'Marcó la cita como avisada', quien); cambios = Object.assign({}, cambios, { avisada: ahora() }); }
+          else { if (c.avisada) anotar(c, 'Quitó la marca de avisada', quien); delete c.avisada; cambios = Object.assign({}, cambios); delete cambios.avisada; }
+        }
         Object.assign(c, cambios);
         escribir(d);
         return c;

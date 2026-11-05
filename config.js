@@ -10,7 +10,7 @@
 
 const CONFIG = {
 
-  version: '1.6',
+  version: '1.7',
 
   /* ── Modo prueba ───────────────────────────────────────
      true  → carga carreras, coordinadores y citas de ejemplo,

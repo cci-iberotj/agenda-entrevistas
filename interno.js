@@ -95,25 +95,48 @@ const Interno = (() => {
         .sort((a, b) => (!!a.avisada - !!b.avisada) || (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
       const faltan = lista.filter(c => !c.avisada).length;
       return '<p class="meta" style="margin-top:-6px">' + (faltan ? '<b>' + faltan + (faltan === 1 ? ' cita falta' : ' citas faltan') + ' por avisar.</b> '
-          : '<b>Todas avisadas.</b> ') + 'Cada botón abre Outlook con un correo para el prospecto y copia a su coordinador; sólo dale Enviar.</p>' +
+          : '<b>Todas avisadas.</b> ') + '«Abrir en Outlook» arma el correo para el prospecto con copia a su coordinador; ' +
+        '«Ya avisé» sólo la marca, por si avisaste por teléfono o WhatsApp.</p>' +
+        (faltan > 1 ? '<div><button class="btn fantasma chico" data-marcar-todas>Marcar las ' + faltan + ' como avisadas</button></div>' : '') +
         (lista.length ? '<div style="display:grid;gap:8px">' + lista.map(c => {
           const co = datos.coordinadores.find(x => x.id === c.coordinador) || {};
           return '<div class="fila-aviso' + (c.avisada ? ' avisada' : '') + '"><span><b>' + esc(Agenda.mayus(Agenda.fechaCorta(c.fecha))) + ', ' + Agenda.horaBonita(c.hora) +
             '</b> · ' + esc(c.nombre) + '<span class="meta" style="display:block">' + esc(co.nombre || '—') + ' · ' + Agenda.MODALIDADES[c.modalidad] +
             (c.avisada ? ' · avisada el ' + new Date(c.avisada).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '') + '</span></span>' +
-            '<button class="btn chico' + (c.avisada ? '' : ' primario') + '" data-avisar="' + c.id + '">' + (c.avisada ? 'Avisar otra vez' : '✉ Abrir en Outlook') + '</button></div>';
+            '<span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">' +
+            (c.avisada
+              ? '<button class="btn fantasma chico" data-marca="' + c.id + '" data-si="">Quitar marca</button>' +
+                '<button class="btn chico" data-avisar="' + c.id + '">Avisar otra vez</button>'
+              : '<button class="btn fantasma chico" data-marca="' + c.id + '" data-si="1">Ya avisé</button>' +
+                '<button class="btn chico primario" data-avisar="' + c.id + '">✉ Abrir en Outlook</button>') +
+            '</span></div>';
         }).join('') + '</div>' : '<div class="vacio"><b>No hay citas próximas.</b></div>') +
         '<p class="meta">¿No se abrió Outlook? En la ficha de cada cita está la opción de Outlook en el navegador.</p>';
     };
     const v = UI.ventana('Avisar citas', pintar(), { ancha: true, sinFoco: true });
+    const repintar = () => { v.querySelector('.cuerpo').innerHTML = pintar(); alCambiar && alCambiar(true); };
     v.addEventListener('click', async e => {
-      const b = e.target.closest('[data-avisar]');
+      const b = e.target.closest('[data-avisar],[data-marca],[data-marcar-todas]');
       if (!b) return;
-      const c = datos.citas.find(x => x.id === b.dataset.avisar);
-      await avisar(c, datos);
-      c.avisada = new Date().toISOString();
-      v.querySelector('.cuerpo').innerHTML = pintar();
-      alCambiar && alCambiar(true);
+      b.disabled = true;
+      try {
+        if (b.dataset.avisar) {
+          const c = datos.citas.find(x => x.id === b.dataset.avisar);
+          await avisar(c, datos);
+          c.avisada = new Date().toISOString();
+        } else if (b.dataset.marca) {
+          const c = datos.citas.find(x => x.id === b.dataset.marca);
+          const si = !!b.dataset.si;
+          await Almacen.actualizarCita(c.id, { avisada: si });
+          if (si) c.avisada = new Date().toISOString(); else delete c.avisada;
+        } else {
+          const pend = datos.citas.filter(c => c.estado === 'agendada' && c.fecha >= hoy && !c.avisada);
+          if (!confirm('¿Marcar las ' + pend.length + ' citas pendientes como avisadas? Hazlo sólo si ya les avisaste por otro medio.')) { b.disabled = false; return; }
+          for (const c of pend) { await Almacen.actualizarCita(c.id, { avisada: true }); c.avisada = new Date().toISOString(); }
+          UI.aviso(pend.length + ' citas marcadas como avisadas.', 'ok');
+        }
+      } catch (err) { UI.aviso(err.message, 'error'); }
+      repintar();
     });
   }
 
@@ -164,7 +187,10 @@ const Interno = (() => {
         esc(co ? co.nombre.split(' ')[0] : 'su coordinador') + ')</em></span><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
         '<button class="btn primario chico" data-avisar-ficha>✉ Abrir en Outlook</button>' +
         '<a class="btn fantasma chico" data-avisar-web target="_blank" rel="noopener" href="' + esc(correoCita(c, datos).web) + '">Outlook en el navegador</a>' +
-        (c.avisada ? '<span class="meta">Avisada el ' + new Date(c.avisada).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) + '</span>' : '') +
+        (c.avisada
+          ? '<span class="meta">Avisada el ' + new Date(c.avisada).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) + '</span>' +
+            '<button class="btn fantasma chico" data-marca-ficha="">Quitar marca</button>'
+          : '<button class="btn fantasma chico" data-marca-ficha="1">Ya avisé</button>') +
         '</div></div>' : '') +
       '<div class="pie">' +
       (c.estado !== 'cancelada' ? '<button class="btn peligro chico" data-cancelar>Cancelar cita</button>' : '') +
@@ -173,6 +199,15 @@ const Interno = (() => {
 
     const avF = v.querySelector('[data-avisar-ficha]');
     if (avF) avF.onclick = async () => { await avisar(c, datos); UI.aviso('Se abrió Outlook. Cita marcada como avisada.', 'ok'); alCambiar && alCambiar(); };
+    const mF = v.querySelector('[data-marca-ficha]');
+    if (mF) mF.onclick = async () => {
+      const si = !!mF.dataset.marcaFicha;
+      try {
+        await Almacen.actualizarCita(c.id, { avisada: si });
+        UI.aviso(si ? 'Marcada como avisada.' : 'Se quitó la marca de avisada.', 'ok');
+        ficha(id, quien, alCambiar); alCambiar && alCambiar();
+      } catch (e) { UI.aviso(e.message, 'error'); }
+    };
     const avW = v.querySelector('[data-avisar-web]');
     if (avW) avW.addEventListener('click', () => { Almacen.actualizarCita(c.id, { avisada: true }).then(() => alCambiar && alCambiar()); });
     let estado = c.estado, res = c.resultado || '';

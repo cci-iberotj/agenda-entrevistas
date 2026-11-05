@@ -451,9 +451,13 @@ begin
     c := admisiones._anotar(c, 'Editó la nota', quien) || jsonb_build_object('nota', left(p_cambios->>'nota', 4000));
   end if;
   -- «avisada»: Admisiones mandó el correo de la cita al prospecto y al coordinador
+  -- avisada = true la pone (con la hora); false la quita
   if p_cambios ? 'avisada' then
-    c := admisiones._anotar(c, 'Avisó por correo al prospecto y al coordinador', quien) ||
-         jsonb_build_object('avisada', now());
+    if coalesce((p_cambios->>'avisada')::boolean, false) then
+      c := admisiones._anotar(c, 'Marcó la cita como avisada', quien) || jsonb_build_object('avisada', now());
+    elsif c ? 'avisada' then
+      c := admisiones._anotar(c, 'Quitó la marca de avisada', quien) - 'avisada';
+    end if;
   end if;
   if (p_cambios ? 'correo' and p_cambios->>'correo' <> coalesce(c->>'correo', '')) or
      (p_cambios ? 'telefono' and p_cambios->>'telefono' <> coalesce(c->>'telefono', '')) then
