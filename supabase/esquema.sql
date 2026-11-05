@@ -227,8 +227,10 @@ begin
       'solicitantes', '[]'::jsonb));
 end $$;
 
+drop function if exists public.adm_reservar(text, text, text, date, text, text);
 create or replace function public.adm_reservar(p_matricula text, p_correo text, p_telefono text,
-                                               p_fecha date, p_hora text, p_modalidad text) returns jsonb
+                                               p_fecha date, p_hora text, p_modalidad text,
+                                               p_whatsapp boolean default false) returns jsonb
 language plpgsql security definer set search_path = admisiones, public as $$
 declare s jsonb; car jsonb; co jsonb; c jsonb;
 begin
@@ -252,6 +254,7 @@ begin
     'carrera', car->>'id', 'coordinador', car->>'coordinador',
     'fecha', p_fecha::text, 'hora', p_hora, 'duracion', (admisiones._aj()->>'duracion')::int,
     'modalidad', p_modalidad, 'estado', 'agendada', 'resultado', '', 'nota', '',
+    'whatsapp', coalesce(p_whatsapp, false),
     'creado', now(), 'historial', '[]'::jsonb);
   return admisiones._guardar_cita(admisiones._anotar(c, 'Agendó su cita', 'Prospecto'));
 end $$;

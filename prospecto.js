@@ -218,7 +218,7 @@
     boton.disabled = true;
     try {
       const c = await Almacen.reservar({
-        matricula: estado.yo.matricula, correo: estado.correo, telefono: f.telefono.value,
+        matricula: estado.yo.matricula, correo: estado.correo, telefono: f.telefono.value, whatsapp: f.whatsapp.checked,
         fecha: estado.fecha, hora: estado.hora, modalidad: estado.modalidad,
       });
       datos = await Almacen.cargar();

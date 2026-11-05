@@ -245,7 +245,7 @@ const Almacen = (() => {
           nombre: Agenda.titulo(s.nombre), telefono: (datos.telefono || '').trim(),
           carrera: carrera.id, coordinador: carrera.coordinador,
           fecha: datos.fecha, hora: datos.hora, duracion: d.ajustes.duracion,
-          modalidad: datos.modalidad, estado: 'agendada', resultado: '', nota: '',
+          modalidad: datos.modalidad, estado: 'agendada', resultado: '', nota: '', whatsapp: !!datos.whatsapp,
           creado: ahora(), historial: [],
         };
         anotar(c, 'Agendó su cita', 'Prospecto');
@@ -292,6 +292,10 @@ const Almacen = (() => {
       },
       /* «A consideración del coordinador»: el coordinador (o Admisiones)
          decide entrevistarlo y lo deja agendar. */
+      async kommoEstado() { return { conectado: false, error: 'Kommo sólo funciona con la base de verdad, no en la prueba local.', embudos: [] }; },
+      async kommoGuardar() { throw new Error('Kommo sólo funciona con la base de verdad.'); },
+      async kommoSincronizar() { return 0; },
+      async kommoReintentar() { return 0; },
       async habilitar(matricula, si, quien) {
         const d = leer();
         const s = d.solicitantes.find(x => x.matricula === matricula);
@@ -402,7 +406,8 @@ const Almacen = (() => {
       },
       async reservar(datos) {
         return rpc('adm_reservar', { p_matricula: datos.matricula, p_correo: datos.correo, p_telefono: datos.telefono,
-                                     p_fecha: datos.fecha, p_hora: datos.hora, p_modalidad: datos.modalidad });
+                                     p_fecha: datos.fecha, p_hora: datos.hora, p_modalidad: datos.modalidad,
+                                     p_whatsapp: !!datos.whatsapp });
       },
       async moverCita(id, fecha, hora, modalidad, quien) {
         if (quien === 'Prospecto')
@@ -415,6 +420,15 @@ const Almacen = (() => {
       },
       async actualizarCita(id, cambios) { return rpc('adm_actualizar_cita', { p_token: token(), p_id: id, p_cambios: cambios }); },
       async habilitar(matricula, si) { return rpc('adm_habilitar', { p_token: token(), p_matricula: matricula, p_si: !!si }); },
+
+      /* Kommo (CRM de Sergio): las citas se mandan solas desde la base
+         (supabase/kommo.sql); aquí sólo se elige embudo y etapa. */
+      async kommoEstado() { return rpc('adm_kommo_estado', { p_token: token() }); },
+      async kommoGuardar(activo, embudo, etapa) {
+        return rpc('adm_kommo_guardar', { p_token: token(), p_activo: !!activo, p_pipeline: embudo, p_status: etapa });
+      },
+      async kommoSincronizar() { return rpc('adm_kommo_sincronizar', { p_token: token() }); },
+      async kommoReintentar() { return rpc('adm_kommo_reintentar', { p_token: token() }); },
 
       async importar(leido, nombreArchivo) {
         const { d, resumen } = fusionar(await this.cargar(), leido, nombreArchivo);

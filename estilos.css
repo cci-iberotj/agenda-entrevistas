@@ -413,3 +413,7 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 14.5px; }
 /* lista «Avisar citas» */
 .fila-aviso { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--linea-sutil); border-radius: 10px; background: var(--capa-2); }
 .fila-aviso.avisada { background: var(--capa-1); opacity: .8; }
+
+/* casilla de WhatsApp en la página del prospecto */
+.casilla-wa { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; color: var(--tinta-media); cursor: pointer; }
+.casilla-wa input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--accion); flex: none; }

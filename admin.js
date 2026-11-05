@@ -531,6 +531,53 @@
     };
   }
 
+  /* ── Kommo ──────────────────────────────────────────────────
+     Cada cita agendada, cambiada o cancelada se manda sola al CRM
+     (la base la deja en una cola y la envía cada minuto). Aquí se
+     elige a qué embudo y etapa llega, porque el CRM se puede
+     reorganizar sin tocar el código. */
+  async function pintarKommo() {
+    const caja = $('#kommo');
+    let e;
+    try { e = await Almacen.kommoEstado(); } catch (err) { e = { conectado: false, error: err.message, embudos: [] }; }
+    const aj = e.ajustes || {};
+    const embudo = e.embudos.find(p => String(p.id) === String(aj.pipeline_id)) || e.embudos.find(p => /admisi/i.test(p.nombre)) || e.embudos[0];
+    const opciones = (lista, elegido) => (lista || []).map(x => '<option value="' + x.id + '"' + (String(x.id) === String(elegido) ? ' selected' : '') + '>' + esc(x.nombre) + '</option>').join('');
+    caja.innerHTML = '<h3>Kommo (CRM)</h3>' +
+      (!e.conectado ? '<div class="alerta-fila grave"><span>No hay conexión con Kommo: ' + esc(e.error || '') + '</span></div>' :
+      '<p class="meta">Cada cita que se agenda, cambia o cancela llega sola al lead del prospecto en Kommo (lo busca por correo o celular; si no existe, lo crea): ' +
+        'le llena la matrícula y los campos «Entrevista: …», deja una nota y, al agendar, lo pasa a la etapa elegida.</p>' +
+      '<label style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="k-activo"' + (aj.activo ? ' checked' : '') +
+        ' style="width:20px;height:20px;accent-color:var(--marca-solida)"> <b>Mandar las citas a Kommo</b></label>' +
+      '<div class="fila-campos"><label class="campo"><span>Embudo</span><select id="k-embudo">' + opciones(e.embudos, embudo && embudo.id) + '</select></label>' +
+        '<label class="campo"><span>Etapa al agendar</span><select id="k-etapa">' + opciones(embudo && embudo.etapas, aj.status_id) + '</select></label></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primario chico" id="k-guardar">Guardar</button>' +
+        (aj.activo ? '<button class="btn chico" id="k-sinc">Mandar las citas próximas que aún no están en Kommo</button>' : '') + '</div>' +
+      '<p class="meta">Enviadas: <b>' + e.enviados + '</b> · en espera: <b>' + e.pendientes + '</b> (se mandan cada minuto)</p>' +
+      (e.errores.length ? '<div class="alerta-fila grave" style="display:block"><b>No se pudieron mandar ' + e.errores.length + ':</b><br>' +
+        e.errores.map(x => esc(x.cita) + ' (' + esc(x.evento) + '): ' + esc(x.error)).join('<br>') +
+        '<div style="margin-top:8px"><button class="btn chico" id="k-reintentar">Reintentar</button></div></div>' : ''));
+    if (!e.conectado) return;
+    $('#k-embudo').onchange = ev => {
+      const p = e.embudos.find(x => String(x.id) === ev.target.value);
+      $('#k-etapa').innerHTML = opciones(p && p.etapas);
+    };
+    $('#k-guardar').onclick = async () => {
+      try {
+        await Almacen.kommoGuardar($('#k-activo').checked, +$('#k-embudo').value, +$('#k-etapa').value);
+        UI.aviso('Guardado.', 'ok'); pintarKommo();
+      } catch (err) { UI.aviso(err.message, 'error'); }
+    };
+    const sinc = $('#k-sinc');
+    if (sinc) sinc.onclick = async () => {
+      if (!confirm('Se mandan a Kommo las citas próximas que todavía no estén allá: se mueven a la etapa elegida y se les deja una nota. ¿Seguir?')) return;
+      try { const n = await Almacen.kommoSincronizar(); UI.aviso(n + (n === 1 ? ' cita en camino' : ' citas en camino') + ' a Kommo.', 'ok'); pintarKommo(); }
+      catch (err) { UI.aviso(err.message, 'error'); }
+    };
+    const re = $('#k-reintentar');
+    if (re) re.onclick = async () => { await Almacen.kommoReintentar(); UI.aviso('Se reintentará en el próximo minuto.', 'ok'); pintarKommo(); };
+  }
+
   /* ── Ajustes ───────────────────────────────────────────── */
   function pintarAjustes() {
     const a = datos.ajustes;
@@ -550,6 +597,8 @@
       '<div class="fila-campos"><label class="campo"><span>La rejilla de horarios empieza a las</span>' + hora('horaInicio', horas.slice(0, -1)) + '</label>' +
       '<label class="campo"><span>y termina a las</span>' + hora('horaFin', horas.slice(1)) + '</label></div>' +
       '</div>' +
+      (Almacen.necesitaSesion ? '<div class="tarjeta" id="kommo" style="padding:22px;display:grid;gap:12px"><h3>Kommo (CRM)</h3>' +
+        '<p class="meta">Cargando…</p></div>' : '') +
       (Almacen.necesitaSesion ? '<div class="tarjeta" style="padding:22px;display:grid;gap:10px"><h3>Mi clave</h3>' +
         '<p class="meta">La de la cuenta «' + esc(Almacen.sesion().quien) + '» con la que entras a este Admin.</p>' +
         '<div><button class="btn chico" id="mi-clave">Cambiar mi clave</button></div></div>' : '') +
@@ -567,6 +616,7 @@
       UI.aviso('Guardado.', 'ok');
     });
     if ($('#mi-clave')) $('#mi-clave').onclick = Interno.cambiarClave;
+    if ($('#kommo')) pintarKommo();
     const r = $('#reiniciar');
     if (r) r.onclick = async () => { datos = await Almacen.reiniciar(); ultimoResumen = null; ciclo = ''; UI.aviso('Prototipo como nuevo.', 'ok'); pintar(); };
   }
