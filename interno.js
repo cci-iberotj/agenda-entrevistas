@@ -41,9 +41,80 @@ const Interno = (() => {
               '<td>' + esc(carrera.nombre) + '</td>' +
               (op.conCoordinador ? '<td>' + esc(co ? co.nombre : '—') + '</td>' : '') +
               '<td>' + modalidad(c.modalidad) + '</td><td>' + insignia(c.estado) +
-              (c.resultado ? ' ' + resultado(c.resultado) : '') + '</td></tr>';
+              (c.resultado ? ' ' + resultado(c.resultado) : '') +
+              (c.estado === 'agendada' && c.avisada ? ' <span class="insignia e-realizada" title="Se avisó por correo">✉ Avisada</span>' : '') + '</td></tr>';
           }).join('');
       }).join('') + '</tbody></table></div>';
+  }
+
+  /* ── Avisar de una cita por correo ─────────────────────────
+     Mientras no haya correos automáticos, Admisiones avisa desde su
+     Outlook: un solo correo para el prospecto con copia al
+     coordinador, ya escrito. Al abrirlo se marca la cita como
+     «avisada» (si se mueve, la marca se quita y hay que avisar otra vez). */
+  function correoCita(c, datos) {
+    const co = datos.coordinadores.find(x => x.id === c.coordinador) || {};
+    const carrera = datos.carreras.find(x => x.id === c.carrera) || { nombre: '' };
+    const pila = Agenda.pila(c.nombre);
+    const enLinea = c.modalidad === 'linea';
+    const ligaOk = Agenda.ligaValida(co.liga) === 'ok';
+    const cuando = Agenda.mayus(Agenda.fechaLarga(c.fecha)) + ', de ' + Agenda.horaBonita(c.hora) + ' a ' + Agenda.horaBonita(Agenda.horaFin(c.hora, c.duracion));
+    const asunto = 'Tu entrevista de admisión: ' + Agenda.fechaCorta(c.fecha) + ', ' + Agenda.horaBonita(c.hora);
+    const cuerpo = [(pila ? 'Hola, ' + pila + ':' : 'Hola:'), '',
+      'Te confirmamos tu entrevista de admisión para ' + carrera.nombre + '.', '',
+      'Cuándo: ' + cuando,
+      'Con: ' + Agenda.nombreCompleto(co),
+      enLinea ? 'En línea: ' + (ligaOk ? co.liga : 'tu coordinador te mandará la liga de la videollamada')
+              : 'Dónde: ' + (co.oficina || 'IBERO Tijuana') + '. Llega 10 minutos antes y pregunta en recepción por la coordinación.',
+      enLinea ? 'Conéctate 5 minutos antes desde un lugar tranquilo, con cámara y audífonos.' : '', '',
+      'Si necesitas cambiarla o cancelarla, entra con tu matrícula y tu correo a:',
+      new URL('index.html', location.href).href.replace(/index\.html$/, ''), '',
+      (co.nombre ? co.nombre.split(' ')[0] + ', te' : 'Te') + ' copiamos para que tengas el registro de esta entrevista.', '',
+      'Admisiones · IBERO Tijuana'].filter((x, i, a) => !(x === '' && a[i - 1] === '')).join('\n');
+    const q = 'subject=' + encodeURIComponent(asunto) + '&body=' + encodeURIComponent(cuerpo);
+    return {
+      outlook: 'mailto:' + c.correo + '?' + (co.correo ? 'cc=' + encodeURIComponent(co.correo) + '&' : '') + q,
+      web: 'https://outlook.office.com/mail/deeplink/compose?to=' + encodeURIComponent(c.correo) +
+        (co.correo ? '&cc=' + encodeURIComponent(co.correo) : '') + '&' + q,
+      para: c.correo, copia: co.correo || '',
+    };
+  }
+  async function avisar(c, datos, alCambiar) {
+    const m = correoCita(c, datos);
+    UI.abrir(m.outlook);
+    try { await Almacen.actualizarCita(c.id, { avisada: true }); } catch (e) { UI.aviso(e.message, 'error'); }
+    alCambiar && alCambiar();
+    return m;
+  }
+  /* Todas las citas próximas, las que faltan por avisar arriba. */
+  async function avisarCitas(alCambiar) {
+    const datos = await Almacen.cargar();
+    const hoy = Agenda.hoy();
+    const pintar = () => {
+      const lista = datos.citas.filter(c => c.estado === 'agendada' && c.fecha >= hoy)
+        .sort((a, b) => (!!a.avisada - !!b.avisada) || (a.fecha + a.hora).localeCompare(b.fecha + b.hora));
+      const faltan = lista.filter(c => !c.avisada).length;
+      return '<p class="meta" style="margin-top:-6px">' + (faltan ? '<b>' + faltan + (faltan === 1 ? ' cita falta' : ' citas faltan') + ' por avisar.</b> '
+          : '<b>Todas avisadas.</b> ') + 'Cada botón abre Outlook con un correo para el prospecto y copia a su coordinador; sólo dale Enviar.</p>' +
+        (lista.length ? '<div style="display:grid;gap:8px">' + lista.map(c => {
+          const co = datos.coordinadores.find(x => x.id === c.coordinador) || {};
+          return '<div class="fila-aviso' + (c.avisada ? ' avisada' : '') + '"><span><b>' + esc(Agenda.mayus(Agenda.fechaCorta(c.fecha))) + ', ' + Agenda.horaBonita(c.hora) +
+            '</b> · ' + esc(c.nombre) + '<span class="meta" style="display:block">' + esc(co.nombre || '—') + ' · ' + Agenda.MODALIDADES[c.modalidad] +
+            (c.avisada ? ' · avisada el ' + new Date(c.avisada).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '') + '</span></span>' +
+            '<button class="btn chico' + (c.avisada ? '' : ' primario') + '" data-avisar="' + c.id + '">' + (c.avisada ? 'Avisar otra vez' : '✉ Abrir en Outlook') + '</button></div>';
+        }).join('') + '</div>' : '<div class="vacio"><b>No hay citas próximas.</b></div>') +
+        '<p class="meta">¿No se abrió Outlook? En la ficha de cada cita está la opción de Outlook en el navegador.</p>';
+    };
+    const v = UI.ventana('Avisar citas', pintar(), { ancha: true, sinFoco: true });
+    v.addEventListener('click', async e => {
+      const b = e.target.closest('[data-avisar]');
+      if (!b) return;
+      const c = datos.citas.find(x => x.id === b.dataset.avisar);
+      await avisar(c, datos);
+      c.avisada = new Date().toISOString();
+      v.querySelector('.cuerpo').innerHTML = pintar();
+      alCambiar && alCambiar(true);
+    });
   }
 
   /* ── Ficha de una cita ─────────────────────────────────── */
@@ -89,11 +160,21 @@ const Interno = (() => {
       '<details><summary class="meta" style="cursor:pointer">Historial</summary><ul class="historial" style="margin-top:8px">' +
       (c.historial || []).map(h => '<li>' + new Date(h.cuando).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) +
         ' · <b>' + esc(h.quien) + '</b> · ' + esc(h.que) + '</li>').join('') + '</ul></details>' +
+      (puedeAvisar() && c.estado === 'agendada' ? '<div class="campo"><span>Avisar de la cita <em>(correo al prospecto con copia a ' +
+        esc(co ? co.nombre.split(' ')[0] : 'su coordinador') + ')</em></span><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
+        '<button class="btn primario chico" data-avisar-ficha>✉ Abrir en Outlook</button>' +
+        '<a class="btn fantasma chico" data-avisar-web target="_blank" rel="noopener" href="' + esc(correoCita(c, datos).web) + '">Outlook en el navegador</a>' +
+        (c.avisada ? '<span class="meta">Avisada el ' + new Date(c.avisada).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) + '</span>' : '') +
+        '</div></div>' : '') +
       '<div class="pie">' +
       (c.estado !== 'cancelada' ? '<button class="btn peligro chico" data-cancelar>Cancelar cita</button>' : '') +
       '<button class="btn chico" data-mover>' + (c.estado === 'cancelada' ? 'Reagendar' : 'Cambiar horario') + '</button>' +
       '<span style="flex:1"></span><button class="btn primario" data-guardar>Guardar</button></div>', { sinFoco: true });
 
+    const avF = v.querySelector('[data-avisar-ficha]');
+    if (avF) avF.onclick = async () => { await avisar(c, datos); UI.aviso('Se abrió Outlook. Cita marcada como avisada.', 'ok'); alCambiar && alCambiar(); };
+    const avW = v.querySelector('[data-avisar-web]');
+    if (avW) avW.addEventListener('click', () => { Almacen.actualizarCita(c.id, { avisada: true }).then(() => alCambiar && alCambiar()); });
     let estado = c.estado, res = c.resultado || '';
     v.querySelectorAll('[data-estado]').forEach(b => b.onclick = () => {
       estado = b.dataset.estado;
@@ -304,7 +385,13 @@ const Interno = (() => {
     return t.slice(0, 4) + '-' + t.slice(4);
   }
 
-  return { tabla, ficha, mover, modalidad, insignia, resultado, ICONO,
+  /* Sólo Admisiones avisa (o el modo de prueba local) */
+  function puedeAvisar() {
+    const s = Almacen.sesion && Almacen.sesion();
+    return !Almacen.necesitaSesion || !!(s && s.rol === 'admin');
+  }
+
+  return { avisarCitas, correoCita, tabla, ficha, mover, modalidad, insignia, resultado, ICONO,
            deCarreras, sinCita, porAgendar, aConsideracion, tablaSolicitantes,
            pantallaEntrar, pantallaClaveNueva, cambiarClave, claveNueva };
 })();

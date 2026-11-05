@@ -41,6 +41,12 @@
   const coDe = carrera => datos.coordinadores.find(x => x.id === carrera.coordinador && x.activo);
   const libres7 = co => co ? Agenda.proximos(co, datos, { dias: 7 }).reduce((n, d) => n + d.espacios.length, 0) : 0;
   const agendaDe = id => 'coordinador.html?como=' + encodeURIComponent(id);
+  /* cuántas citas próximas faltan por avisar, en el mismo botón */
+  function botonAvisar() {
+    const hoy = Agenda.hoy();
+    const n = datos.citas.filter(c => c.estado === 'agendada' && c.fecha >= hoy && !c.avisada).length;
+    return '<button class="btn chico' + (n ? ' primario' : '') + '" data-avisar-citas>✉ Avisar citas' + (n ? ' (' + n + ' por avisar)' : '') + '</button>';
+  }
   const sinLiga = co => co.activo && Agenda.ofreceLinea(co) && Agenda.ligaValida(co.liga) !== 'ok';
 
   /* ── Tablero ───────────────────────────────────────────── */
@@ -93,6 +99,7 @@
         : CONFIG.modoPrueba ? 'Datos de ejemplo. Carga el Excel de Admisiones en «Prospectos».'
         : 'Todavía no se carga el Excel de Admisiones: hazlo en «Prospectos».') + '</p></div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap">' + chipsCiclo() +
+      botonAvisar() +
       '<a class="btn chico" href="index.html" target="_blank">Ver la página del prospecto ↗</a></div></div>' +
       '<div class="cifras">' +
       '<div class="tarjeta cifra marca"><small>Por agendar</small><b>' + suma('faltan') + '</b><span>aprobados sin cita</span></div>' +
@@ -239,7 +246,8 @@
     const ya = document.activeElement && document.activeElement.id === 'buscar';
     $('#principal').innerHTML = '<div class="contenido">' +
       '<div class="seccion-titulo"><div><h2>Citas</h2><p class="meta" id="cuantas"></p></div>' +
-      '<button class="btn chico" id="exportar">Descargar para Excel</button></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' + botonAvisar() +
+      '<button class="btn chico" id="exportar">Descargar para Excel</button></div></div>' +
       '<div class="filtros">' +
       '<input type="text" id="buscar" placeholder="Buscar por nombre, matrícula, correo o celular" value="' + esc(filtro.texto) + '">' +
       '<select id="f-carrera"><option value="">Todas las carreras</option>' +
@@ -565,7 +573,7 @@
 
   /* ── Clics del contenido ───────────────────────────────── */
   $('#principal').addEventListener('click', e => {
-    const t = e.target.closest('[data-mandar],[data-accesos],[data-habilitar],[data-cita],[data-periodo],[data-ir],[data-nuevo-co],[data-editar-co],[data-nueva-ca],[data-editar-ca],[data-ciclo],[data-sit]');
+    const t = e.target.closest('[data-avisar-citas],[data-mandar],[data-accesos],[data-habilitar],[data-cita],[data-periodo],[data-ir],[data-nuevo-co],[data-editar-co],[data-nueva-ca],[data-editar-ca],[data-ciclo],[data-sit]');
     if (!t) return;
     const d = t.dataset;
     if (d.habilitar) Almacen.habilitar(d.habilitar, !!d.si, QUIEN).then(recargar);
@@ -577,6 +585,7 @@
     else if ('nuevoCo' in d) editarCoordinador(null);
     else if ('accesos' in d) darAccesos();
     else if (d.mandar) mandarAcceso(d.mandar);
+    else if ('avisarCitas' in d) Interno.avisarCitas(silencioso => silencioso ? Almacen.cargar().then(x => { datos = x; }) : recargar());
     else if (d.editarCo) editarCoordinador(d.editarCo);
     else if ('nuevaCa' in d) editarCarrera(null);
     else if (d.editarCa) editarCarrera(d.editarCa);

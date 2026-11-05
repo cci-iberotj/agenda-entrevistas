@@ -409,3 +409,7 @@ table.tabla { width: 100%; border-collapse: collapse; font-size: 14.5px; }
 .ayuda-liga summary { cursor: pointer; font-weight: 600; color: var(--marca-tinta); }
 .ayuda-liga ol { margin: 10px 0; padding-left: 22px; display: grid; gap: 6px; font-size: 14.5px; }
 .ayuda-liga code { font-size: 12.5px; background: var(--capa-0); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+
+/* lista «Avisar citas» */
+.fila-aviso { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--linea-sutil); border-radius: 10px; background: var(--capa-2); }
+.fila-aviso.avisada { background: var(--capa-1); opacity: .8; }

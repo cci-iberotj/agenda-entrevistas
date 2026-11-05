@@ -260,6 +260,7 @@ const Almacen = (() => {
         const antes = Agenda.fechaCorta(c.fecha) + ' ' + c.hora;
         /* al moverla toma la duración vigente: es la que usó el hueco nuevo */
         Object.assign(c, { fecha, hora, modalidad, estado: 'agendada', duracion: d.ajustes.duracion });
+        delete c.avisada;   // el aviso anterior ya no vale
         anotar(c, 'Cambió de ' + antes + ' a ' + Agenda.fechaCorta(fecha) + ' ' + hora, quien);
         escribir(d);
         return c;
@@ -281,6 +282,7 @@ const Almacen = (() => {
         if ('resultado' in cambios && cambios.resultado !== (c.resultado || ''))
           anotar(c, 'Resultado de la entrevista: ' + (Agenda.RESULTADOS[cambios.resultado] || 'sin definir'), quien);
         if (cambios.correo || cambios.telefono) anotar(c, 'Corrigió datos de contacto', quien);
+        if (cambios.avisada) { anotar(c, 'Avisó por correo al prospecto y al coordinador', quien); cambios = Object.assign({}, cambios, { avisada: ahora() }); }
         Object.assign(c, cambios);
         escribir(d);
         return c;

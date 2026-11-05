@@ -269,7 +269,8 @@ begin
   if not admisiones._libre(co, p_fecha, p_hora, p_modalidad, p_id, false) then raise exception 'OCUPADO'; end if;
   c := admisiones._anotar(c, 'Cambió de ' || admisiones._fecha_corta((c->>'fecha')::date) || ' ' || (c->>'hora') ||
                           ' a ' || admisiones._fecha_corta(p_fecha) || ' ' || p_hora, 'Prospecto');
-  c := c || jsonb_build_object('fecha', p_fecha::text, 'hora', p_hora, 'modalidad', p_modalidad, 'estado', 'agendada',
+  -- si se mueve, el aviso anterior ya no vale: se vuelve a avisar
+  c := (c - 'avisada') || jsonb_build_object('fecha', p_fecha::text, 'hora', p_hora, 'modalidad', p_modalidad, 'estado', 'agendada',
                                'duracion', (admisiones._aj()->>'duracion')::int);
   return admisiones._guardar_cita(c);
 end $$;
@@ -449,6 +450,11 @@ begin
   if p_cambios ? 'nota' and p_cambios->>'nota' <> coalesce(c->>'nota', '') then
     c := admisiones._anotar(c, 'Editó la nota', quien) || jsonb_build_object('nota', left(p_cambios->>'nota', 4000));
   end if;
+  -- «avisada»: Admisiones mandó el correo de la cita al prospecto y al coordinador
+  if p_cambios ? 'avisada' then
+    c := admisiones._anotar(c, 'Avisó por correo al prospecto y al coordinador', quien) ||
+         jsonb_build_object('avisada', now());
+  end if;
   if (p_cambios ? 'correo' and p_cambios->>'correo' <> coalesce(c->>'correo', '')) or
      (p_cambios ? 'telefono' and p_cambios->>'telefono' <> coalesce(c->>'telefono', '')) then
     c := admisiones._anotar(c, 'Corrigió datos de contacto', quien) ||
@@ -469,7 +475,8 @@ begin
   if not admisiones._libre(co, p_fecha, p_hora, p_modalidad, p_id, true) then raise exception 'OCUPADO'; end if;
   c := admisiones._anotar(c, 'Cambió de ' || admisiones._fecha_corta((c->>'fecha')::date) || ' ' || (c->>'hora') ||
          ' a ' || admisiones._fecha_corta(p_fecha) || ' ' || p_hora, case when s.rol = 'admin' then 'Admisiones' else s.nombre end);
-  c := c || jsonb_build_object('fecha', p_fecha::text, 'hora', p_hora, 'modalidad', p_modalidad, 'estado', 'agendada',
+  -- si se mueve, el aviso anterior ya no vale: se vuelve a avisar
+  c := (c - 'avisada') || jsonb_build_object('fecha', p_fecha::text, 'hora', p_hora, 'modalidad', p_modalidad, 'estado', 'agendada',
                                'duracion', (admisiones._aj()->>'duracion')::int);
   return admisiones._guardar_cita(c);
 end $$;
