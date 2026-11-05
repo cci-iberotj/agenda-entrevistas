@@ -56,6 +56,15 @@ begin
   return r->'body';
 end $$;
 
+-- «lunes 9 de noviembre, 9:00 a. m.»: lo que leen las plantillas de WhatsApp
+create or replace function admisiones._cuando(f date, h text) returns text language sql immutable as $$
+  select (array['domingo','lunes','martes','miércoles','jueves','viernes','sábado'])[extract(dow from f)::int + 1] || ' ' ||
+         extract(day from f)::int || ' de ' ||
+         (array['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'])[extract(month from f)::int] || ', ' ||
+         (case when split_part(h, ':', 1)::int % 12 = 0 then 12 else split_part(h, ':', 1)::int % 12 end) || ':' || split_part(h, ':', 2) ||
+         case when split_part(h, ':', 1)::int < 12 then ' a. m.' else ' p. m.' end
+$$;
+
 -- ── Mandar una cita a Kommo ──────────────────────────────────
 create or replace function admisiones._kommo_cita(p_id text, p_evento text) returns void
 language plpgsql security definer set search_path = admisiones, public, extensions as $$
@@ -130,6 +139,10 @@ begin
   if campos ? 'fecha' then
     vals := vals || jsonb_build_object('field_id', (campos->>'fecha')::bigint, 'values', jsonb_build_array(jsonb_build_object('value',
       extract(epoch from ((((c->>'fecha')::date) + (c->>'hora')::time) at time zone 'America/Tijuana'))::bigint)));
+  end if;
+  if campos ? 'cuando' then
+    vals := vals || jsonb_build_object('field_id', (campos->>'cuando')::bigint, 'values', jsonb_build_array(jsonb_build_object('value',
+      admisiones._cuando((c->>'fecha')::date, c->>'hora'))));
   end if;
   if campos ? 'coordinador' then
     vals := vals || jsonb_build_object('field_id', (campos->>'coordinador')::bigint, 'values', jsonb_build_array(jsonb_build_object('value',
@@ -253,6 +266,7 @@ begin
   existentes := admisiones._kommo_ok(admisiones._kommo('GET', '/leads/custom_fields?limit=250'), 'leer campos')->'_embedded'->'custom_fields';
   campos := '{}'::jsonb;
   for f in select * from (values ('matricula', 'Matrícula', 'text'), ('fecha', 'Entrevista: fecha y hora', 'date_time'),
+                                  ('cuando', 'Entrevista: cuándo', 'text'),
                                   ('coordinador', 'Entrevista: coordinador', 'text'), ('modalidad', 'Entrevista: modalidad', 'text'),
                                   ('lugar', 'Entrevista: lugar o liga', 'text'), ('estado', 'Entrevista: estado', 'text')) v(clave, nombre, tipo) loop
     select x into nuevo from jsonb_array_elements(existentes) x where x->>'name' = f.nombre limit 1;

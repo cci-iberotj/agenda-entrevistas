@@ -296,6 +296,8 @@ const Almacen = (() => {
       async kommoGuardar() { throw new Error('Kommo sólo funciona con la base de verdad.'); },
       async kommoSincronizar() { return 0; },
       async kommoReintentar() { return 0; },
+      async waEstado() { throw new Error('WhatsApp sólo funciona con la base de verdad.'); },
+      async waGuardar() { throw new Error('WhatsApp sólo funciona con la base de verdad.'); },
       async habilitar(matricula, si, quien) {
         const d = leer();
         const s = d.solicitantes.find(x => x.matricula === matricula);
@@ -429,6 +431,12 @@ const Almacen = (() => {
       },
       async kommoSincronizar() { return rpc('adm_kommo_sincronizar', { p_token: token() }); },
       async kommoReintentar() { return rpc('adm_kommo_reintentar', { p_token: token() }); },
+      /* WhatsApp: la base lanza los Salesbots de Kommo (supabase/whatsapp.sql) */
+      async waEstado() { return rpc('adm_kommo_wa_estado', { p_token: token() }); },
+      async waGuardar(a) {
+        return rpc('adm_kommo_wa_guardar', { p_token: token(), p_activo: !!a.activo, p_prueba: !!a.prueba, p_lista: a.lista || '',
+          p_bot_confirmacion: a.botConfirmacion || null, p_bot_recordatorio: a.botRecordatorio || null, p_horas: a.horas || 24 });
+      },
 
       async importar(leido, nombreArchivo) {
         const { d, resumen } = fusionar(await this.cargar(), leido, nombreArchivo);

@@ -578,6 +578,52 @@
     if (re) re.onclick = async () => { await Almacen.kommoReintentar(); UI.aviso('Se reintentará en el próximo minuto.', 'ok'); pintarKommo(); };
   }
 
+  /* ── WhatsApp ───────────────────────────────────────────────
+     La confirmación y el recordatorio salen por el WhatsApp de la
+     IBERO en Kommo: la base lanza un Salesbot que manda la plantilla
+     aprobada por Meta. Sólo a quien aceptó la casilla al agendar.
+     En modo prueba sólo sale a los celulares de la lista. */
+  async function pintarWhatsapp() {
+    const caja = $('#whatsapp');
+    let e;
+    try { e = await Almacen.waEstado(); }
+    catch (err) { caja.innerHTML = '<h3>WhatsApp</h3><div class="alerta-fila grave"><span>' + esc(err.message) + '</span></div>'; return; }
+    const aj = e.ajustes || {};
+    const prueba = aj.prueba !== false;
+    const bots = sel => '<option value="">— ninguno —</option>' + (e.bots || []).map(b =>
+      '<option value="' + b.id + '"' + (String(b.id) === String(sel) ? ' selected' : '') + '>' + esc(b.nombre) + '</option>').join('');
+    const fecha = t => t ? new Date(t).toLocaleString('es-MX', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+    caja.innerHTML = '<h3>WhatsApp</h3>' +
+      '<p class="meta">Al agendar (o cambiar) la cita le llega al prospecto una confirmación por WhatsApp, y otra para recordarle un día antes. ' +
+        'Sólo a quien marcó la casilla de WhatsApp. Salen del número de la IBERO en Kommo, con las plantillas aprobadas por Meta.</p>' +
+      '<label style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="w-activo"' + (aj.activo ? ' checked' : '') +
+        ' style="width:20px;height:20px;accent-color:var(--marca-solida)"> <b>Mandar avisos por WhatsApp</b></label>' +
+      '<div class="fila-campos"><label class="campo"><span>Bot de confirmación</span><select id="w-conf">' + bots(aj.bot_confirmacion) + '</select></label>' +
+        '<label class="campo"><span>Bot de recordatorio</span><select id="w-rec">' + bots(aj.bot_recordatorio) + '</select></label></div>' +
+      '<label class="campo"><span>El recordatorio sale</span><select id="w-horas">' +
+        [12, 24, 48].map(h => '<option value="' + h + '"' + ((aj.horas || 24) === h ? ' selected' : '') + '>' + h + ' horas antes</option>').join('') + '</select></label>' +
+      '<div class="tarjeta" style="padding:14px;display:grid;gap:10px;background:' + (prueba ? 'var(--aviso-fondo, #FFF6E5)' : 'transparent') + '">' +
+        '<label style="display:flex;gap:10px;align-items:center;cursor:pointer"><input type="checkbox" id="w-prueba"' + (prueba ? ' checked' : '') +
+          ' style="width:20px;height:20px;accent-color:var(--marca-solida)"> <b>Modo prueba: sólo a estos celulares</b></label>' +
+        '<label class="campo"><span>Celulares de prueba (10 dígitos, separados por coma)</span>' +
+          '<input type="text" inputmode="tel" id="w-lista" value="' + esc((aj.lista || []).join(', ')) + '" placeholder="6640000000"></label>' +
+        '<small class="meta">En modo prueba no se le manda nada a ningún prospecto: sólo a quien tenga en Kommo únicamente celulares de esta lista. ' +
+          'Quítalo cuando la prueba salga bien.</small></div>' +
+      '<div><button class="btn primario chico" id="w-guardar">Guardar</button></div>' +
+      ((e.ultimos || []).length ? '<div style="display:grid;gap:4px"><b style="font-size:14px">Últimos avisos</b>' +
+        e.ultimos.map(u => '<div class="meta" style="font-size:13.5px">' + esc(fecha(u.en)) + ' · ' + esc(u.cual) + ' · ' + esc(u.nombre || u.cita) + ' — ' + esc(u.que || '') + '</div>').join('') +
+        '</div>' : '');
+    $('#w-guardar').onclick = async () => {
+      const activo = $('#w-activo').checked, enPrueba = $('#w-prueba').checked;
+      if (activo && !enPrueba && !confirm('Sin modo prueba, los avisos les llegan a TODOS los prospectos que agenden y aceptaron WhatsApp. ¿Seguir?')) return;
+      try {
+        await Almacen.waGuardar({ activo, prueba: enPrueba, lista: $('#w-lista').value,
+          botConfirmacion: +$('#w-conf').value || null, botRecordatorio: +$('#w-rec').value || null, horas: +$('#w-horas').value });
+        UI.aviso('Guardado.', 'ok'); pintarWhatsapp();
+      } catch (err) { UI.aviso(err.message, 'error'); }
+    };
+  }
+
   /* ── Ajustes ───────────────────────────────────────────── */
   function pintarAjustes() {
     const a = datos.ajustes;
@@ -599,6 +645,8 @@
       '</div>' +
       (Almacen.necesitaSesion ? '<div class="tarjeta" id="kommo" style="padding:22px;display:grid;gap:12px"><h3>Kommo (CRM)</h3>' +
         '<p class="meta">Cargando…</p></div>' : '') +
+      (Almacen.necesitaSesion ? '<div class="tarjeta" id="whatsapp" style="padding:22px;display:grid;gap:12px"><h3>WhatsApp</h3>' +
+        '<p class="meta">Cargando…</p></div>' : '') +
       (Almacen.necesitaSesion ? '<div class="tarjeta" style="padding:22px;display:grid;gap:10px"><h3>Mi clave</h3>' +
         '<p class="meta">La de la cuenta «' + esc(Almacen.sesion().quien) + '» con la que entras a este Admin.</p>' +
         '<div><button class="btn chico" id="mi-clave">Cambiar mi clave</button></div></div>' : '') +
@@ -617,6 +665,7 @@
     });
     if ($('#mi-clave')) $('#mi-clave').onclick = Interno.cambiarClave;
     if ($('#kommo')) pintarKommo();
+    if ($('#whatsapp')) pintarWhatsapp();
     const r = $('#reiniciar');
     if (r) r.onclick = async () => { datos = await Almacen.reiniciar(); ultimoResumen = null; ciclo = ''; UI.aviso('Prototipo como nuevo.', 'ok'); pintar(); };
   }
